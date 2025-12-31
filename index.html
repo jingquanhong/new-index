@@ -12,14 +12,13 @@
             font-family: "Brush Script MT", "Times New Roman", cursive, serif;
             font-style: italic;
             margin: 0;
-            padding: 10px; /* 减小内边距适配手机 */
+            padding: 10px;
             overflow: hidden; 
-            touch-action: manipulation; /* 禁止双击缩放 */
+            touch-action: manipulation;
         }
 
         h1, h2, h3 { margin: 5px 0; font-weight: normal; }
 
-        /* 主布局容器：桌面端三栏，手机端单栏 */
         .main-container {
             display: grid;
             grid-template-columns: 30% 30% 35%;
@@ -29,20 +28,18 @@
             margin: 0 auto;
         }
 
-        /* 手机端适配：当宽度小于 800px 时切换为竖向布局 */
         @media (max-width: 800px) {
             .main-container {
                 display: flex;
                 flex-direction: column;
                 height: auto;
-                overflow-y: auto; /* 允许手机竖向滚动 */
+                overflow-y: auto;
             }
-            body { overflow: auto; } /* 允许body滚动 */
-            .panel-box { margin-bottom: 20px; height: 300px; } /* 限制高度 */
+            body { overflow: auto; }
+            .panel-box { margin-bottom: 20px; height: 300px; }
             .log-area { height: 150px; }
         }
 
-        /* 通用面板边框风格 */
         .panel-box {
             border: 2px solid #FF0000;
             background-color: #0a0a0a;
@@ -62,7 +59,6 @@
             text-shadow: 0 0 5px #FFFF00;
         }
 
-        /* --- 日志区域 --- */
         .log-area {
             flex-grow: 1;
             background-color: #000;
@@ -76,11 +72,10 @@
             text-align: left;
         }
 
-        /* --- 中间：控制区域 --- */
         .center-panel {
             display: flex;
             flex-direction: column;
-            justify-content: flex-start; /* 改为从上到下排列 */
+            justify-content: flex-start;
             align-items: center;
             gap: 15px;
         }
@@ -111,7 +106,7 @@
         .matlab-btn:active { transform: scale(0.98); }
         .matlab-btn:disabled { background-color: #550000; color: #888; }
 
-        /* --- 新增：屏幕虚拟按键区域 --- */
+        /* --- 屏幕虚拟按键区域 --- */
         .d-pad-container {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
@@ -125,7 +120,7 @@
             color: #FFFF00;
             font-size: 28px;
             font-weight: bold;
-            font-family: "Consolas", monospace; /* 字母用等宽字体更像键盘 */
+            font-family: "Consolas", monospace;
             font-style: normal;
             height: 60px;
             border-radius: 8px;
@@ -134,7 +129,7 @@
             align-items: center;
             cursor: pointer;
             box-shadow: 0 0 5px rgba(255, 0, 0, 0.3);
-            user-select: none; /* 禁止选中文本 */
+            user-select: none;
             -webkit-user-select: none;
         }
 
@@ -144,7 +139,18 @@
             box-shadow: 0 0 15px #FF0000;
         }
 
-        /* 模式列表风格 */
+        /* 底部功能键容器：用于并排 Z 和 X */
+        .func-row {
+            grid-column: 1 / -1; /* 横跨所有列 */
+            display: flex;
+            gap: 10px;
+        }
+        .func-btn {
+            flex: 1; /* 平分宽度 */
+            background: #220000; /* 深红背景区分功能键 */
+            font-size: 24px;
+        }
+
         .mode-list {
             list-style: none;
             padding: 0;
@@ -157,7 +163,6 @@
         .mode-list li::before { content: "⚪"; position: absolute; left: 0; color: #FFF; font-size: 14px; }
         .mode-list li.active::before { content: "🔴"; color: #FF0000; text-shadow: 0 0 5px red; }
 
-        /* --- 右侧：仪表显示 --- */
         .gauge-container {
             flex-grow: 1;
             display: flex;
@@ -167,7 +172,7 @@
         .gauge-box {
             border: 1px solid #FF0000;
             background: #000;
-            height: 80px; /* 固定高度 */
+            height: 80px;
             margin-bottom: 10px;
             position: relative;
             display: flex;
@@ -180,7 +185,6 @@
         .axis-marker { width: 4px; height: 16px; background-color: #FF0000; position: absolute; left: 50%; top: -8px; transition: left 0.1s linear; box-shadow: 0 0 5px #FF0000; }
         .data-value { font-size: 32px; font-weight: bold; color: #FFFF00; font-family: "Courier New", monospace; font-style: normal; margin-top: 5px; }
 
-        /* 滚动条 */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #111; }
         ::-webkit-scrollbar-thumb { background: #FF0000; border-radius: 3px; }
@@ -212,6 +216,11 @@
                     <div id="pad-a" class="pad-btn" data-key="a">A</div>
                     <div id="pad-s" class="pad-btn" data-key="s">S</div>
                     <div id="pad-d" class="pad-btn" data-key="d">D</div>
+
+                    <div class="func-row">
+                        <div id="pad-z" class="pad-btn func-btn" data-key="z">Z (53)</div>
+                        <div id="pad-x" class="pad-btn func-btn" data-key="x">X (54)</div>
+                    </div>
                 </div>
             </div>
 
@@ -319,7 +328,7 @@
             }
         }
 
-        // --- 逻辑封装：处理功能键 ---
+        // --- 逻辑封装 ---
         function handleMove(cmd, name) {
             addLog(sendLogDiv, `TX: ${name} (0${cmd})`, "#FFFF00");
             sendByte(cmd);
@@ -368,6 +377,17 @@
             if (key === 'd') { activeKeys.add('d'); handleMove(4, "Right"); }
             if (key === 'q') toggleQ();
             if (key === 'e') toggleE();
+
+            // --- Z 和 X 键逻辑 ---
+            if (key === 'z') {
+                addLog(sendLogDiv, "TX: Z-Func (53)", "#FF00FF");
+                sendByte(53);
+            }
+            // --- 新增 X 键 ---
+            if (key === 'x') {
+                addLog(sendLogDiv, "TX: X-Func (54)", "#FF00FF");
+                sendByte(54);
+            }
         });
 
         window.addEventListener('keyup', (e) => {
@@ -377,6 +397,7 @@
             const uiBtn = document.querySelector(`.pad-btn[data-key="${key}"]`);
             if (uiBtn) uiBtn.classList.remove('active-touch');
 
+            // 注意：Z 和 X 键不需要在松开时触发停止
             if (['w','a','s','d'].includes(key)) {
                 activeKeys.delete(key);
                 if (activeKeys.size === 0) handleStop();
@@ -388,9 +409,9 @@
         document.querySelectorAll('.pad-btn').forEach(btn => {
             const key = btn.dataset.key;
 
-            // 按下事件 (兼容 鼠标MouseDown 和 手机TouchStart)
+            // 按下事件
             const startAction = (e) => {
-                e.preventDefault(); // 防止手机上长按弹出菜单
+                e.preventDefault(); 
                 btn.classList.add('active-touch');
                 
                 if (key === 'w') handleMove(1, "Forward");
@@ -399,14 +420,24 @@
                 if (key === 'd') handleMove(4, "Right");
                 if (key === 'q') toggleQ();
                 if (key === 'e') toggleE();
+                
+                // --- Z 和 X 触摸逻辑 ---
+                if (key === 'z') {
+                    addLog(sendLogDiv, "TX: Z-Func (53)", "#FF00FF");
+                    sendByte(53);
+                }
+                if (key === 'x') {
+                    addLog(sendLogDiv, "TX: X-Func (54)", "#FF00FF");
+                    sendByte(54);
+                }
             };
 
-            // 松开事件 (兼容 鼠标MouseUp 和 手机TouchEnd)
+            // 松开事件
             const endAction = (e) => {
                 e.preventDefault();
                 btn.classList.remove('active-touch');
 
-                // 只有 WASD 需要松开停止，QE是切换开关不需要松开逻辑
+                // 只有 WASD 需要松开停止
                 if (['w','a','s','d'].includes(key)) {
                     handleStop();
                 }
@@ -417,7 +448,6 @@
 
             btn.addEventListener('mouseup', endAction);
             btn.addEventListener('touchend', endAction);
-            // 移出按钮范围也视为松开
             btn.addEventListener('mouseleave', (e) => {
                  if(['w','a','s','d'].includes(key) && btn.classList.contains('active-touch')) {
                      endAction(e);
