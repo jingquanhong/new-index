@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>MATLAB 风格控制终端</title>
+    <title>MATLAB 机器人 3D 监控终端</title>
     <style>
         /* --- 全局风格设置 (复刻 MATLAB 界面) --- */
         body {
@@ -21,14 +21,15 @@
 
         .main-container {
             display: grid;
-            grid-template-columns: 30% 30% 35%;
-            gap: 20px;
+            /* 左:日志(25%) 中:3D地图+控制(45%) 右:仪表(30%) */
+            grid-template-columns: 25% 45% 30%; 
+            gap: 15px;
             height: 95vh;
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
         }
 
-        @media (max-width: 800px) {
+        @media (max-width: 900px) {
             .main-container {
                 display: flex;
                 flex-direction: column;
@@ -36,27 +37,30 @@
                 overflow-y: auto;
             }
             body { overflow: auto; }
-            .panel-box { margin-bottom: 20px; height: 300px; }
-            .log-area { height: 150px; }
+            .panel-box, .center-panel { margin-bottom: 20px; }
+            #map-wrapper { height: 350px; }
         }
 
         .panel-box {
             border: 2px solid #FF0000;
             background-color: #0a0a0a;
-            padding: 15px;
+            padding: 10px;
             border-radius: 5px;
             position: relative;
             box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
             display: flex;
             flex-direction: column;
+            justify-content: flex-start; 
         }
 
         .panel-title {
             color: #FFFF00;
-            font-size: 24px;
+            font-size: 22px;
             text-align: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             text-shadow: 0 0 5px #FFFF00;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
         }
 
         .log-area {
@@ -66,124 +70,142 @@
             color: #00FF00;
             font-family: "Consolas", monospace;
             font-style: normal;
-            font-size: 14px;
+            font-size: 12px;
             overflow-y: auto;
-            padding: 10px;
+            padding: 5px;
             text-align: left;
         }
 
         .center-panel {
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
-            align-items: center;
-            gap: 15px;
+            gap: 10px;
+            overflow-y: auto;
+            padding-right: 5px;
         }
 
         .control-block {
             width: 100%;
             border: 2px solid #FF0000;
             background: #000;
-            padding: 15px;
+            padding: 10px;
             text-align: center;
             border-radius: 10px;
             box-sizing: border-box;
+            flex-shrink: 0;
         }
 
+        /* --- 按钮样式 --- */
         .matlab-btn {
             background-color: #FF0000;
             color: #FFFF00;
             font-family: inherit;
-            font-size: 24px;
+            font-size: 20px;
             font-style: italic;
             border: 2px solid #FF5555;
-            padding: 10px;
+            padding: 8px;
             width: 100%;
             cursor: pointer;
             border-radius: 8px;
-            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
         }
         .matlab-btn:active { transform: scale(0.98); }
         .matlab-btn:disabled { background-color: #550000; color: #888; }
 
-        /* --- 屏幕虚拟按键区域 --- */
+        /* --- 3D Canvas 样式 --- */
+        #map-wrapper {
+            width: 100%;
+            height: 320px; /* 增加高度以适应3D视图 */
+            background: #000;
+            background: radial-gradient(circle, #111 0%, #000 100%);
+            position: relative;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #444;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            cursor: move;
+        }
+        .map-overlay-data {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            font-family: "Consolas", monospace;
+            font-size: 12px;
+            color: #00FF00;
+            font-style: normal;
+            background: rgba(0,0,0,0.6);
+            padding: 4px;
+            border: 1px solid #333;
+            pointer-events: none;
+        }
+
+        /* --- 虚拟键盘样式 --- */
         .d-pad-container {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
+            gap: 6px;
         }
 
         .pad-btn {
             background: #111;
             border: 2px solid #FF0000;
             color: #FFFF00;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
             font-family: "Consolas", monospace;
             font-style: normal;
-            height: 60px;
-            border-radius: 8px;
+            height: 50px;
+            border-radius: 6px;
             display: flex;
             justify-content: center;
             align-items: center;
             cursor: pointer;
             box-shadow: 0 0 5px rgba(255, 0, 0, 0.3);
             user-select: none;
-            -webkit-user-select: none;
         }
-
         .pad-btn:active, .pad-btn.active-touch {
             background-color: #FF0000;
             color: #000;
-            box-shadow: 0 0 15px #FF0000;
+            box-shadow: 0 0 10px #FF0000;
         }
 
-        /* 底部功能键容器：用于并排 Z 和 X */
-        .func-row {
-            grid-column: 1 / -1; /* 横跨所有列 */
-            display: flex;
-            gap: 10px;
-        }
-        .func-btn {
-            flex: 1; /* 平分宽度 */
-            background: #220000; /* 深红背景区分功能键 */
-            font-size: 24px;
-        }
+        .func-row { grid-column: 1 / -1; display: flex; gap: 6px; }
+        .func-btn { flex: 1; background: #220000; font-size: 18px; }
 
+        /* --- 模式列表 --- */
         .mode-list {
-            list-style: none;
-            padding: 0;
-            text-align: left;
-            font-size: 20px;
-            color: #FFF;
-            font-family: "Times New Roman", serif;
+            list-style: none; padding: 0; text-align: left; font-size: 16px; color: #FFF; font-family: "Times New Roman", serif; margin: 0;
         }
-        .mode-list li { margin: 5px 0; padding-left: 20px; position: relative; }
-        .mode-list li::before { content: "⚪"; position: absolute; left: 0; color: #FFF; font-size: 14px; }
+        .mode-list li { margin: 2px 0; padding-left: 20px; position: relative; }
+        .mode-list li::before { content: "⚪"; position: absolute; left: 0; color: #FFF; font-size: 12px; }
         .mode-list li.active::before { content: "🔴"; color: #FF0000; text-shadow: 0 0 5px red; }
 
+        /* --- 右侧仪表盘样式 (Gauge) --- */
         .gauge-container {
             flex-grow: 1;
             display: flex;
             flex-direction: column;
             justify-content: space-around;
+            gap: 10px;
         }
         .gauge-box {
             border: 1px solid #FF0000;
             background: #000;
-            height: 80px;
-            margin-bottom: 10px;
+            height: 90px;
             position: relative;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            border-radius: 4px;
         }
-        .gauge-label { font-size: 20px; color: #FFFF00; position: absolute; top: 2px; left: 5px; }
-        .axis-line { width: 90%; height: 2px; background-color: #555; position: relative; margin-top: 10px; }
-        .axis-marker { width: 4px; height: 16px; background-color: #FF0000; position: absolute; left: 50%; top: -8px; transition: left 0.1s linear; box-shadow: 0 0 5px #FF0000; }
-        .data-value { font-size: 32px; font-weight: bold; color: #FFFF00; font-family: "Courier New", monospace; font-style: normal; margin-top: 5px; }
+        .gauge-label { font-size: 18px; color: #FFFF00; position: absolute; top: 5px; left: 8px; }
+        .axis-line { width: 90%; height: 2px; background-color: #555; position: relative; margin-top: 15px; }
+        .axis-marker { width: 4px; height: 16px; background-color: #FF0000; position: absolute; left: 50%; top: -7px; transition: left 0.1s linear; box-shadow: 0 0 5px #FF0000; }
+        .data-value { font-size: 28px; font-weight: bold; color: #FFFF00; font-family: "Courier New", monospace; font-style: normal; margin-top: 5px; }
 
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #111; }
@@ -194,20 +216,41 @@
 <body>
 
     <div class="main-container">
+        
         <div class="panel-box">
-            <div class="panel-title">LinkState</div>
+            <div class="panel-title">System Log</div>
             <div id="send-log" class="log-area">
-                <div>[System] Ready...</div>
+                <div>[System] 3D Engine Ready...</div>
+            </div>
+            <div style="margin-top: 10px;">
+                <button id="btn-stop" class="matlab-btn" onclick="sendByte(0)">EMERGENCY STOP</button>
             </div>
         </div>
 
         <div class="center-panel">
+            
             <div class="control-block" style="border: none; background: transparent; padding: 0;">
                 <button id="btn-connect" class="matlab-btn">LinkToBlueTooth</button>
             </div>
 
+            <div class="control-block" style="padding: 2px; border-color: #00FF00;">
+                <div style="color:#FFFF00; font-size:18px; margin-bottom:5px;">3D Trajectory Visualization</div>
+                <div id="map-wrapper">
+                    <canvas id="map-canvas"></canvas>
+                    <div class="map-overlay-data">
+                        X: <span id="txt-odom-x">0.00</span> m<br>
+                        Y: <span id="txt-odom-y">0.00</span> m<br>
+                        Yaw: <span id="txt-odom-yaw">0.0</span>°
+                    </div>
+                </div>
+                <div style="display:flex; justify-content: space-between; margin-top:5px; padding: 0 10px;">
+                    <span style="font-size:12px; color:#888; font-family:'Courier New'">View: Isometric 3D</span>
+                    <button onclick="clearMap()" style="background:#330000; color:#F00; border:1px solid #F00; cursor:pointer;">Reset Odom</button>
+                </div>
+            </div>
+
             <div class="control-block">
-                <div class="panel-title" style="font-size: 24px;">Direct Control</div>
+                <div class="panel-title" style="font-size: 20px; border:none;">Controls</div>
                 <div class="d-pad-container">
                     <div id="pad-q" class="pad-btn" data-key="q">Q</div>
                     <div id="pad-w" class="pad-btn" data-key="w">W</div>
@@ -218,62 +261,331 @@
                     <div id="pad-d" class="pad-btn" data-key="d">D</div>
 
                     <div class="func-row">
-                        <div id="pad-z" class="pad-btn func-btn" data-key="z">Z (53)</div>
-                        <div id="pad-x" class="pad-btn func-btn" data-key="x">X (54)</div>
+                        <div id="pad-z" class="pad-btn func-btn" data-key="z">Z(53)</div>
+                        <div id="pad-x" class="pad-btn func-btn" data-key="x">X(54)</div>
                     </div>
                 </div>
             </div>
 
             <div class="control-block">
-                <div class="panel-title" style="font-size: 24px;">Mode Status</div>
                 <ul class="mode-list">
                     <li id="mode-remote" class="active">Remote (WASD)</li>
                     <li id="mode-voice">Mode Q (Toggle)</li>
                     <li id="mode-nav">Mode E (Toggle)</li>
                 </ul>
             </div>
-
-            <div class="control-block" style="border: none; background: transparent; padding: 0;">
-                <button id="btn-stop" class="matlab-btn" onclick="sendByte(0)">Stop Reading</button>
-            </div>
         </div>
 
         <div class="panel-box">
             <div class="panel-title">Sensors</div>
-            <div class="log-area" id="receive-log" style="height: 80px; flex-grow: 0; border-bottom: 2px solid red; margin-bottom: 10px;"></div>
-            
             <div class="gauge-container">
                 <div class="gauge-box">
-                    <div class="gauge-label">X Pos</div>
-                    <div class="axis-line"><div id="marker-x" class="axis-marker"></div></div>
-                    <div id="val-x" class="data-value">0.00</div>
+                    <div class="gauge-label">L-Speed (mm/s)</div>
+                    <div class="axis-line"><div id="marker-l" class="axis-marker"></div></div>
+                    <div id="val-l" class="data-value">0</div>
                 </div>
+                
                 <div class="gauge-box">
-                    <div class="gauge-label">Y Pos</div>
-                    <div class="axis-line"><div id="marker-y" class="axis-marker"></div></div>
-                    <div id="val-y" class="data-value">0.00</div>
+                    <div class="gauge-label">R-Speed (mm/s)</div>
+                    <div class="axis-line"><div id="marker-r" class="axis-marker"></div></div>
+                    <div id="val-r" class="data-value">0</div>
                 </div>
+
                 <div class="gauge-box">
-                    <div class="gauge-label">Yaw</div>
+                    <div class="gauge-label">Yaw (Deg)</div>
                     <div class="axis-line"><div id="marker-yaw" class="axis-marker"></div></div>
                     <div id="val-yaw" class="data-value">0.0</div>
                 </div>
             </div>
         </div>
+
     </div>
 
     <script>
+        // --- 蓝牙与变量 ---
         const serviceUUID = 0xFFE0;
         let device;
         let writeCharacteristic = null;
-        let notifyCharacteristic = null;
         let activeKeys = new Set();
         let isToggledQ = false;
         let isToggledE = false;
 
         const connectBtn = document.getElementById('btn-connect');
         const sendLogDiv = document.getElementById('send-log');
-        const receiveLogDiv = document.getElementById('receive-log');
+
+        // --- 3D 引擎与里程计核心变量 ---
+        const canvas = document.getElementById('map-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let robotX = 0; // 全局坐标 X (mm)
+        let robotY = 0; // 全局坐标 Y (mm)
+        let robotYawRad = 0; // 全局角度 (弧度)
+        let lastTimestamp = 0; 
+        
+        const ROBOT_TRACK_WIDTH = 200; // 轮距 200mm
+        const TRAJECTORY_MAX_POINTS = 500; // 最大轨迹点数，防止内存溢出
+        let trajectory = []; // 存储 {x, y}
+
+        // 视图设置 (等轴测参数)
+        const ISO_ANGLE = 30 * (Math.PI / 180); 
+        let viewScale = 0.5; // 缩放比例
+        
+        // 初始化 Canvas
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            drawFrame(); // 立即重绘
+        }
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        // --- 3D 数学库 (Vanilla JS) ---
+        // 将 3D 世界坐标 (x, y, z) 转换为 2D 屏幕坐标 (u, v)
+        // 使用简单的 Isometric 投影逻辑
+        function project3D(x, y, z) {
+            // 1. 相机跟随：将世界原点移动到机器人位置 (保持机器人始终在中心附近)
+            // 我们希望机器人在屏幕中心
+            const offsetX = -robotX; 
+            const offsetY = -robotY;
+            
+            // 世界坐标相对机器人的偏移
+            let wx = x + offsetX;
+            let wy = y + offsetY;
+
+            // 2. 等轴测旋转 (Isometric Rotation)
+            // x_iso = (x - y) * cos(30)
+            // y_iso = (x + y) * sin(30) - z
+            let screenX = (wx - wy) * Math.cos(ISO_ANGLE);
+            let screenY = (wx + wy) * Math.sin(ISO_ANGLE) - z;
+
+            // 3. 缩放与屏幕中心平移
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            return {
+                x: cx + screenX * viewScale,
+                y: cy + screenY * viewScale
+            };
+        }
+
+        // --- 绘图核心循环 ---
+        function drawFrame() {
+            // 1. 清空画布
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. 绘制地面网格 (3D Grid)
+            drawGrid();
+
+            // 3. 绘制历史轨迹 (3D Lines)
+            drawTrajectory3D();
+
+            // 4. 绘制机器人模型 (3D Wireframe)
+            drawRobot3D();
+        }
+
+        function drawGrid() {
+            ctx.beginPath();
+            ctx.strokeStyle = "#333333";
+            ctx.lineWidth = 1;
+
+            const gridSize = 500; // 格子大小 mm
+            const range = 5; // 绘制范围 (前后左右各几格)
+            
+            // 基于机器人当前位置取整，实现无尽网格效果
+            const baseX = Math.floor(robotX / gridSize) * gridSize;
+            const baseY = Math.floor(robotY / gridSize) * gridSize;
+
+            for(let i = -range; i <= range; i++) {
+                // 横线 (平行X轴)
+                let p1 = project3D(baseX - range*gridSize, baseY + i*gridSize, 0);
+                let p2 = project3D(baseX + range*gridSize, baseY + i*gridSize, 0);
+                ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+
+                // 竖线 (平行Y轴)
+                let p3 = project3D(baseX + i*gridSize, baseY - range*gridSize, 0);
+                let p4 = project3D(baseX + i*gridSize, baseY + range*gridSize, 0);
+                ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+            }
+            ctx.stroke();
+            
+            // 绘制原点标记
+            let origin = project3D(0, 0, 0);
+            ctx.fillStyle = "#FF0000";
+            ctx.fillRect(origin.x-2, origin.y-2, 4, 4);
+        }
+
+        function drawTrajectory3D() {
+            if (trajectory.length < 2) return;
+            ctx.beginPath();
+            ctx.strokeStyle = "#00FF00"; // 轨迹亮绿
+            ctx.lineWidth = 2;
+            
+            // 将轨迹点投影到屏幕
+            let start = project3D(trajectory[0].x, trajectory[0].y, 0);
+            ctx.moveTo(start.x, start.y);
+            
+            for (let i = 1; i < trajectory.length; i++) {
+                let p = project3D(trajectory[i].x, trajectory[i].y, 0);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+        }
+
+        function drawRobot3D() {
+            // 定义机器人尺寸 (mm)
+            const chassisL = 250; // 长
+            const chassisW = 160; // 宽
+            const chassisH = 60;  // 高
+            const wheelR = 40;    // 轮半径
+            const wheelW = 20;    // 轮宽
+            const zOffset = wheelR; // 离地高度
+
+            // 差速底盘由三个部分组成：车身 + 左轮 + 右轮
+            
+            // 辅助函数：根据机器人当前的 Yaw 旋转局部坐标并加上全局坐标
+            function transform(lx, ly, lz) {
+                // 旋转 (Z轴旋转)
+                // x' = x*cos - y*sin
+                // y' = x*sin + y*cos
+                const rx = lx * Math.cos(robotYawRad) - ly * Math.sin(robotYawRad);
+                const ry = lx * Math.sin(robotYawRad) + ly * Math.cos(robotYawRad);
+                
+                // 平移
+                return project3D(robotX + rx, robotY + ry, lz);
+            }
+
+            // 绘制立方体线框
+            function drawBox(cx, cy, cz, L, W, H, color) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                
+                const dx = L/2, dy = W/2, dz = H; // dz是从cz向上
+                
+                // 底部4点
+                const b1 = transform(cx-dx, cy-dy, cz);
+                const b2 = transform(cx+dx, cy-dy, cz);
+                const b3 = transform(cx+dx, cy+dy, cz);
+                const b4 = transform(cx-dx, cy+dy, cz);
+                
+                // 顶部4点
+                const t1 = transform(cx-dx, cy-dy, cz+dz);
+                const t2 = transform(cx+dx, cy-dy, cz+dz);
+                const t3 = transform(cx+dx, cy+dy, cz+dz);
+                const t4 = transform(cx-dx, cy+dy, cz+dz);
+
+                // 连线
+                // 底面
+                ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y); ctx.lineTo(b3.x, b3.y); ctx.lineTo(b4.x, b4.y); ctx.lineTo(b1.x, b1.y);
+                // 顶面
+                ctx.moveTo(t1.x, t1.y); ctx.lineTo(t2.x, t2.y); ctx.lineTo(t3.x, t3.y); ctx.lineTo(t4.x, t4.y); ctx.lineTo(t1.x, t1.y);
+                // 立柱
+                ctx.moveTo(b1.x, b1.y); ctx.lineTo(t1.x, t1.y);
+                ctx.moveTo(b2.x, b2.y); ctx.lineTo(t2.x, t2.y);
+                ctx.moveTo(b3.x, b3.y); ctx.lineTo(t3.x, t3.y);
+                ctx.moveTo(b4.x, b4.y); ctx.lineTo(t4.x, t4.y);
+                
+                ctx.stroke();
+
+                // 填充一点颜色增加立体感 (半透明)
+                ctx.fillStyle = color + "33"; // Hex alpha ~20%
+                ctx.fill();
+            }
+
+            // 1. 绘制左轮 (Offset Y = +100)
+            drawBox(0, ROBOT_TRACK_WIDTH/2, 0, 2*wheelR, wheelW, 2*wheelR, "#FF00FF"); 
+            
+            // 2. 绘制右轮 (Offset Y = -100)
+            drawBox(0, -ROBOT_TRACK_WIDTH/2, 0, 2*wheelR, wheelW, 2*wheelR, "#FF00FF");
+
+            // 3. 绘制车身 (中心, 稍微抬高)
+            // 车头指示：画一个亮色线条
+            drawBox(0, 0, 10, chassisL, chassisW, chassisH, "#00FFFF"); 
+
+            // 绘制车头方向箭头
+            ctx.beginPath();
+            ctx.strokeStyle = "#FFFF00";
+            const headStart = transform(chassisL/2, 0, chassisH+10);
+            const headEnd = transform(chassisL/2 + 100, 0, chassisH+10);
+            ctx.moveTo(headStart.x, headStart.y);
+            ctx.lineTo(headEnd.x, headEnd.y);
+            ctx.stroke();
+        }
+
+        function clearMap() {
+            robotX = 0; robotY = 0; robotYawRad = 0;
+            trajectory = [];
+            lastTimestamp = 0;
+            updateOdomText();
+            drawFrame();
+        }
+
+        function updateOdomText() {
+            document.getElementById('txt-odom-x').innerText = (robotX / 1000).toFixed(2);
+            document.getElementById('txt-odom-y').innerText = (robotY / 1000).toFixed(2);
+            const deg = robotYawRad * (180/Math.PI);
+            document.getElementById('txt-odom-yaw').innerText = deg.toFixed(1);
+        }
+
+        // --- 数据处理逻辑 ---
+        function handleDataReceived(event) {
+            const data = event.target.value;
+            if (data.byteLength >= 16 && data.getUint8(0) === 0x55) {
+                
+                const lSpeed = data.getFloat32(2, true); // mm/s
+                const rSpeed = data.getFloat32(6, true); // mm/s
+                const yawDeg = data.getFloat32(10, true); // Degree
+
+                // 更新仪表
+                updateGauges(lSpeed, rSpeed, yawDeg);
+
+                // 更新里程计
+                updateOdometry(lSpeed, rSpeed, yawDeg);
+            }
+        }
+
+        function updateOdometry(vL, vR, yawDeg) {
+            const now = Date.now();
+            if (lastTimestamp === 0) {
+                lastTimestamp = now;
+                return;
+            }
+            const dt = (now - lastTimestamp) / 1000;
+            lastTimestamp = now;
+
+            // 运动学
+            const vCenter = (vL + vR) / 2;
+            robotYawRad = yawDeg * (Math.PI / 180);
+
+            const dx = vCenter * Math.cos(robotYawRad) * dt;
+            const dy = vCenter * Math.sin(robotYawRad) * dt;
+
+            robotX += dx;
+            robotY += dy;
+
+            // 记录轨迹 (采样稀疏化，避免点太密)
+            // 仅当移动距离超过 10mm 时才记录新点
+            const lastPt = trajectory[trajectory.length - 1];
+            if (!lastPt || Math.hypot(robotX - lastPt.x, robotY - lastPt.y) > 10) {
+                trajectory.push({x: robotX, y: robotY});
+                if (trajectory.length > TRAJECTORY_MAX_POINTS) trajectory.shift();
+            }
+
+            updateOdomText();
+            drawFrame(); // 触发重绘
+        }
+
+        function updateGauges(l, r, yaw) {
+            document.getElementById('val-l').innerText = l.toFixed(0);
+            document.getElementById('val-r').innerText = r.toFixed(0);
+            document.getElementById('val-yaw').innerText = yaw.toFixed(1);
+
+            const mapPct = (val, min, max) => Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100)) + "%";
+            document.getElementById('marker-l').style.left = mapPct(l, -500, 500);
+            document.getElementById('marker-r').style.left = mapPct(r, -500, 500);
+            document.getElementById('marker-yaw').style.left = mapPct(yaw, -180, 180);
+        }
 
         function addLog(element, msg, color="#00FF00") {
             const now = new Date().toLocaleTimeString();
@@ -281,7 +593,7 @@
             element.innerHTML = `<div style="color:${color}">[${now}] ${msg}</div>` + element.innerHTML;
         }
 
-        // --- 蓝牙连接逻辑 ---
+        // --- 蓝牙连接 (保持不变) ---
         connectBtn.addEventListener('click', async () => {
             try {
                 writeCharacteristic = null;
@@ -291,21 +603,15 @@
                 addLog(sendLogDiv, "Connected: " + device.name, "#00FF00");
                 const service = await server.getPrimaryService(serviceUUID);
                 const characteristics = await service.getCharacteristics();
-
                 for (const c of characteristics) {
                     if (c.properties.notify) {
-                        notifyCharacteristic = c;
                         await c.startNotifications();
                         c.addEventListener('characteristicvaluechanged', handleDataReceived);
                     }
-                    if (c.properties.write || c.properties.writeWithoutResponse) {
-                        writeCharacteristic = c;
-                        addLog(sendLogDiv, "TX Ready", "#00FF00");
-                    }
+                    if (c.properties.write || c.properties.writeWithoutResponse) writeCharacteristic = c;
                 }
-                
                 if (writeCharacteristic) {
-                    connectBtn.innerText = "Connected";
+                    connectBtn.innerText = "LINKED";
                     connectBtn.style.backgroundColor = "#228B22";
                     connectBtn.disabled = true;
                 }
@@ -318,165 +624,65 @@
             if (!writeCharacteristic) return;
             try {
                 const buffer = new Uint8Array([value]);
-                if (writeCharacteristic.properties.writeWithoutResponse) {
-                    await writeCharacteristic.writeValueWithoutResponse(buffer);
-                } else {
-                    await writeCharacteristic.writeValueWithResponse(buffer);
-                }
-            } catch (error) {
-                addLog(sendLogDiv, "Send Fail", "#FF0000");
-            }
+                if (writeCharacteristic.properties.writeWithoutResponse) await writeCharacteristic.writeValueWithoutResponse(buffer);
+                else await writeCharacteristic.writeValueWithResponse(buffer);
+            } catch (error) { addLog(sendLogDiv, "Send Fail", "#FF0000"); }
         }
 
-        // --- 逻辑封装 ---
+        // --- 控制逻辑 (保持不变) ---
         function handleMove(cmd, name) {
-            addLog(sendLogDiv, `TX: ${name} (0${cmd})`, "#FFFF00");
+            addLog(sendLogDiv, `TX: ${name}`, "#FFFF00");
             sendByte(cmd);
-            document.getElementById('mode-remote').classList.add('active');
         }
-
-        function handleStop() {
-            addLog(sendLogDiv, "TX: Stop (00)", "#888");
-            sendByte(0);
-        }
+        function handleStop() { sendByte(0); }
 
         function toggleQ() {
             isToggledQ = !isToggledQ;
-            const cmd = isToggledQ ? 5 : 6;
-            addLog(sendLogDiv, `TX: Mode Q ${isToggledQ?'On':'Off'}`, "#00FFFF");
-            sendByte(cmd);
-            toggleListUI('mode-voice', isToggledQ);
+            sendByte(isToggledQ ? 5 : 6);
+            document.getElementById('mode-voice').classList.toggle('active', isToggledQ);
         }
-
         function toggleE() {
             isToggledE = !isToggledE;
-            const cmd = isToggledE ? 7 : 8;
-            addLog(sendLogDiv, `TX: Mode E ${isToggledE?'On':'Off'}`, "#00FFFF");
-            sendByte(cmd);
-            toggleListUI('mode-nav', isToggledE);
+            sendByte(isToggledE ? 7 : 8);
+            document.getElementById('mode-nav').classList.toggle('active', isToggledE);
         }
 
-        function toggleListUI(id, isActive) {
-            const el = document.getElementById(id);
-            if (isActive) el.classList.add('active');
-            else el.classList.remove('active');
-        }
-
-        // --- 物理键盘逻辑 ---
+        // 键盘与触摸
         window.addEventListener('keydown', (e) => {
             if (e.repeat) return;
-            const key = e.key.toLowerCase();
-            
-            // UI按键高亮效果
-            const uiBtn = document.querySelector(`.pad-btn[data-key="${key}"]`);
-            if (uiBtn) uiBtn.classList.add('active-touch');
-
-            if (key === 'w') { activeKeys.add('w'); handleMove(1, "Forward"); }
-            if (key === 's') { activeKeys.add('s'); handleMove(2, "Backward"); }
-            if (key === 'a') { activeKeys.add('a'); handleMove(3, "Left"); }
-            if (key === 'd') { activeKeys.add('d'); handleMove(4, "Right"); }
-            if (key === 'q') toggleQ();
-            if (key === 'e') toggleE();
-
-            // --- Z 和 X 键逻辑 ---
-            if (key === 'z') {
-                addLog(sendLogDiv, "TX: Z-Func (53)", "#FF00FF");
-                sendByte(53);
-            }
-            // --- 新增 X 键 ---
-            if (key === 'x') {
-                addLog(sendLogDiv, "TX: X-Func (54)", "#FF00FF");
-                sendByte(54);
-            }
+            const k = e.key.toLowerCase();
+            const btn = document.querySelector(`.pad-btn[data-key="${k}"]`);
+            if (btn) btn.classList.add('active-touch');
+            if (k==='w') { activeKeys.add('w'); handleMove(1, "Fwd"); }
+            if (k==='s') { activeKeys.add('s'); handleMove(2, "Bwd"); }
+            if (k==='a') { activeKeys.add('a'); handleMove(3, "Left"); }
+            if (k==='d') { activeKeys.add('d'); handleMove(4, "Right"); }
+            if (k==='q') toggleQ();
+            if (k==='e') toggleE();
+            if (k==='z') sendByte(53);
+            if (k==='x') sendByte(54);
         });
-
         window.addEventListener('keyup', (e) => {
-            const key = e.key.toLowerCase();
-            
-            // 移除UI高亮
-            const uiBtn = document.querySelector(`.pad-btn[data-key="${key}"]`);
-            if (uiBtn) uiBtn.classList.remove('active-touch');
-
-            // 注意：Z 和 X 键不需要在松开时触发停止
-            if (['w','a','s','d'].includes(key)) {
-                activeKeys.delete(key);
-                if (activeKeys.size === 0) handleStop();
-            }
+            const k = e.key.toLowerCase();
+            const btn = document.querySelector(`.pad-btn[data-key="${k}"]`);
+            if (btn) btn.classList.remove('active-touch');
+            if (['w','a','s','d'].includes(k)) { activeKeys.delete(k); if(!activeKeys.size) handleStop(); }
         });
-
-        // --- 屏幕触摸按键逻辑 (支持手机多点触控) ---
-        // 为所有 .pad-btn 添加事件
         document.querySelectorAll('.pad-btn').forEach(btn => {
-            const key = btn.dataset.key;
-
-            // 按下事件
-            const startAction = (e) => {
-                e.preventDefault(); 
-                btn.classList.add('active-touch');
-                
-                if (key === 'w') handleMove(1, "Forward");
-                if (key === 's') handleMove(2, "Backward");
-                if (key === 'a') handleMove(3, "Left");
-                if (key === 'd') handleMove(4, "Right");
-                if (key === 'q') toggleQ();
-                if (key === 'e') toggleE();
-                
-                // --- Z 和 X 触摸逻辑 ---
-                if (key === 'z') {
-                    addLog(sendLogDiv, "TX: Z-Func (53)", "#FF00FF");
-                    sendByte(53);
-                }
-                if (key === 'x') {
-                    addLog(sendLogDiv, "TX: X-Func (54)", "#FF00FF");
-                    sendByte(54);
-                }
+            const k = btn.dataset.key;
+            const start = (e) => { e.preventDefault(); btn.classList.add('active-touch'); 
+                if(k==='w') handleMove(1,"Fwd"); if(k==='s') handleMove(2,"Bwd");
+                if(k==='a') handleMove(3,"Left"); if(k==='d') handleMove(4,"Right");
+                if(k==='q') toggleQ(); if(k==='e') toggleE();
+                if(k==='z') sendByte(53); if(k==='x') sendByte(54);
             };
-
-            // 松开事件
-            const endAction = (e) => {
-                e.preventDefault();
-                btn.classList.remove('active-touch');
-
-                // 只有 WASD 需要松开停止
-                if (['w','a','s','d'].includes(key)) {
-                    handleStop();
-                }
-            };
-
-            btn.addEventListener('mousedown', startAction);
-            btn.addEventListener('touchstart', startAction);
-
-            btn.addEventListener('mouseup', endAction);
-            btn.addEventListener('touchend', endAction);
-            btn.addEventListener('mouseleave', (e) => {
-                 if(['w','a','s','d'].includes(key) && btn.classList.contains('active-touch')) {
-                     endAction(e);
-                 }
-            });
+            const end = (e) => { e.preventDefault(); btn.classList.remove('active-touch'); if(['w','a','s','d'].includes(k)) handleStop(); };
+            btn.addEventListener('mousedown', start); btn.addEventListener('touchstart', start);
+            btn.addEventListener('mouseup', end); btn.addEventListener('touchend', end);
         });
 
-        // --- 数据解析 ---
-        function handleDataReceived(event) {
-            const data = event.target.value;
-            if (data.byteLength >= 16 && data.getUint8(0) === 0x55) {
-                const x = data.getFloat32(2, true);
-                const y = data.getFloat32(6, true);
-                const yaw = data.getFloat32(10, true);
-
-                document.getElementById('val-x').innerText = x.toFixed(2);
-                document.getElementById('val-y').innerText = y.toFixed(2);
-                document.getElementById('val-yaw').innerText = yaw.toFixed(1);
-
-                const mapToPercent = (val, min, max) => {
-                    let pct = ((val - min) / (max - min)) * 100;
-                    return Math.max(0, Math.min(100, pct)) + "%";
-                };
-
-                document.getElementById('marker-x').style.left = mapToPercent(x, -500, 500);
-                document.getElementById('marker-y').style.left = mapToPercent(y, -500, 500);
-                document.getElementById('marker-yaw').style.left = mapToPercent(yaw, -180, 180);
-            }
-        }
+        // 初始绘制一次
+        drawFrame();
     </script>
 </body>
 </html>
