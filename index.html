@@ -3,18 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>MATLAB 机器人 3D 智能地面站 (V4.0 稳定版)</title>
+    <title>MATLAB 机器人 3D 智能地面站 (V4.1 多主题版)</title>
     <style>
-        /* --- 全局风格设置 (MATLAB 复古风) --- */
+        /* --- CSS 变量定义 (主题核心) --- */
+        :root {
+            /* 默认主题: MATLAB Retro */
+            --bg-color: #000000;
+            --panel-bg: #0a0a0a;
+            --text-color: #FFFF00;
+            --accent-color: #FF0000; /* 边框和按钮 */
+            --highlight-color: #00FF00; /* 日志高亮 */
+            --grid-color: #222222;
+            --font-main: "Brush Script MT", "Times New Roman", cursive, serif;
+            --font-mono: "Consolas", monospace;
+            --btn-text: #FFFF00;
+            --btn-bg: #FF0000;
+            --map-overlay-bg: rgba(0,0,0,0.6);
+        }
+
+        /* 主题 2: Cyberpunk Neon */
+        [data-theme="cyberpunk"] {
+            --bg-color: #050a14;
+            --panel-bg: #0b1021;
+            --text-color: #00f3ff;
+            --accent-color: #d600ff;
+            --highlight-color: #00ff9d;
+            --grid-color: #1a2642;
+            --font-main: "Segoe UI", Arial, sans-serif; /* 更科幻的字体 */
+            --font-mono: "Courier New", monospace;
+            --btn-text: #ffffff;
+            --btn-bg: #d600ff;
+            --map-overlay-bg: rgba(11, 16, 33, 0.8);
+        }
+
+        /* 主题 3: Clean Lab (白底) */
+        [data-theme="clean"] {
+            --bg-color: #f0f2f5;
+            --panel-bg: #ffffff;
+            --text-color: #333333;
+            --accent-color: #007bff;
+            --highlight-color: #28a745;
+            --grid-color: #e0e0e0;
+            --font-main: "Helvetica Neue", Arial, sans-serif;
+            --font-mono: "Menlo", monospace;
+            --btn-text: #ffffff;
+            --btn-bg: #007bff;
+            --map-overlay-bg: rgba(255, 255, 255, 0.9);
+        }
+
+        /* --- 全局样式 --- */
         body {
-            background-color: #000000;
-            color: #FFFF00;
-            font-family: "Brush Script MT", "Times New Roman", cursive, serif;
-            font-style: italic;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
             margin: 0;
             padding: 10px;
             overflow: hidden; 
             touch-action: none; 
+            transition: background-color 0.3s, color 0.3s;
         }
 
         h1, h2, h3 { margin: 5px 0; font-weight: normal; }
@@ -40,35 +86,36 @@
             #map-wrapper { height: 400px; }
         }
 
+        /* 风格化容器 */
         .panel-box {
-            border: 2px solid #FF0000;
-            background-color: #0a0a0a;
+            border: 2px solid var(--accent-color);
+            background-color: var(--panel-bg);
             padding: 10px;
             border-radius: 5px;
             position: relative;
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
             display: flex;
             flex-direction: column;
+            transition: border-color 0.3s, background-color 0.3s;
         }
 
         .panel-title {
-            color: #FFFF00;
+            color: var(--text-color);
             font-size: 22px;
             text-align: center;
             margin-bottom: 10px;
-            text-shadow: 0 0 5px #FFFF00;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #444;
             padding-bottom: 5px;
+            font-style: italic;
         }
 
         .log-area {
             flex-grow: 1;
-            background-color: #000;
-            border: 1px solid #333;
-            color: #00FF00;
-            font-family: "Consolas", monospace;
+            background-color: var(--bg-color);
+            border: 1px solid #444;
+            color: var(--highlight-color);
+            font-family: var(--font-mono);
             font-size: 12px;
-            font-style: normal;
             overflow-y: auto;
             padding: 5px;
             text-align: left;
@@ -84,35 +131,38 @@
 
         .control-block {
             width: 100%;
-            border: 2px solid #FF0000;
-            background: #000;
+            border: 2px solid var(--accent-color);
+            background: var(--panel-bg);
             padding: 10px;
             text-align: center;
             border-radius: 10px;
             box-sizing: border-box;
             flex-shrink: 0;
+            transition: background-color 0.3s;
         }
 
+        /* 按钮样式 */
         .matlab-btn {
-            background-color: #FF0000;
-            color: #FFFF00;
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
             font-family: inherit;
             font-size: 20px;
-            font-style: italic;
-            border: 2px solid #FF5555;
+            border: none;
             padding: 8px;
             width: 100%;
             cursor: pointer;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.1s, opacity 0.3s;
         }
         .matlab-btn:active { transform: scale(0.98); }
-        .matlab-btn:disabled { background-color: #550000; color: #888; }
+        .matlab-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
         #map-wrapper {
             width: 100%;
             height: 380px;
-            background: radial-gradient(circle, #111 0%, #000 100%);
+            /* 背景色由 Canvas 覆盖，这里设置兜底 */
+            background: var(--bg-color); 
             position: relative;
             border-radius: 5px;
             overflow: hidden;
@@ -124,79 +174,78 @@
             height: 100%;
             display: block;
         }
+        
         .map-overlay-data {
             position: absolute;
             top: 5px;
             left: 5px;
-            font-family: "Consolas", monospace;
+            font-family: var(--font-mono);
             font-size: 12px;
-            color: #00FF00;
-            font-style: normal;
-            background: rgba(0,0,0,0.6);
+            color: var(--text-color);
+            background: var(--map-overlay-bg);
             padding: 4px;
-            border: 1px solid #333;
+            border: 1px solid #444;
             pointer-events: none;
+            border-radius: 4px;
         }
         .map-overlay-help {
             position: absolute;
             bottom: 5px;
             right: 5px;
-            font-family: Arial, sans-serif;
+            font-family: sans-serif;
             font-size: 10px;
-            font-style: normal;
             color: #888;
             text-align: right;
             pointer-events: none;
-            line-height: 1.4;
         }
 
+        /* 方向键 */
         .d-pad-container {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 6px;
         }
-
         .pad-btn {
-            background: #111;
-            border: 2px solid #FF0000;
-            color: #FFFF00;
+            background: var(--bg-color);
+            border: 2px solid var(--accent-color);
+            color: var(--text-color);
             font-size: 24px;
             font-weight: bold;
-            font-family: "Consolas", monospace;
-            font-style: normal;
+            font-family: var(--font-mono);
             height: 50px;
             border-radius: 6px;
             display: flex;
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            box-shadow: 0 0 5px rgba(255, 0, 0, 0.3);
             user-select: none;
+            transition: background 0.1s;
         }
         .pad-btn:active, .pad-btn.active-touch {
-            background-color: #FF0000;
-            color: #000;
-            box-shadow: 0 0 10px #FF0000;
+            background-color: var(--accent-color);
+            color: #fff;
         }
-        
         .pad-btn.toggled-on {
-            background-color: #440000;
-            border-color: #FF8800;
-            box-shadow: inset 0 0 10px #FF0000;
-            color: #FF8800;
+            background-color: var(--accent-color); /* 激活状态 */
+            color: #fff;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
         }
 
         .func-row { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 2px; }
-        .func-btn { flex: 1; background: #220000; font-size: 18px; }
-        .auto-btn { background-color: #330000; border-color: #AA0000; font-size: 16px; font-family: "Courier New"; }
+        .func-btn { flex: 1; font-size: 18px; border-color: #666; }
+        .auto-btn { flex: 1; font-size: 16px; border-color: var(--highlight-color); color: var(--highlight-color); }
+        .auto-btn:active { background: var(--highlight-color); color: #000; }
 
+        /* 模式列表 */
         .mode-list {
-            list-style: none; padding: 0; text-align: left; font-size: 16px; color: #FFF; font-family: "Times New Roman", serif; margin: 0;
+            list-style: none; padding: 0; text-align: left; font-size: 16px; color: var(--text-color); margin: 0;
         }
         .mode-list li { margin: 2px 0; padding-left: 20px; position: relative; }
-        .mode-list li::before { content: "⚪"; position: absolute; left: 0; color: #FFF; font-size: 12px; }
-        .mode-list li.active::before { content: "🔴"; color: #FF0000; text-shadow: 0 0 5px red; }
+        .mode-list li::before { content: "⚪"; position: absolute; left: 0; font-size: 12px; }
+        .mode-list li.active::before { content: "🔴"; color: var(--accent-color); }
+        .mode-list li.active { color: var(--accent-color); font-weight: bold; }
 
+        /* 仪表盘 */
         .gauge-container {
             flex-grow: 1;
             display: flex;
@@ -205,8 +254,8 @@
             gap: 10px;
         }
         .gauge-box {
-            border: 1px solid #FF0000;
-            background: #000;
+            border: 1px solid var(--accent-color);
+            background: var(--bg-color);
             height: 90px;
             position: relative;
             display: flex;
@@ -215,20 +264,36 @@
             align-items: center;
             border-radius: 4px;
         }
-        .gauge-label { font-size: 18px; color: #FFFF00; position: absolute; top: 5px; left: 8px; }
+        .gauge-label { font-size: 18px; color: var(--text-color); position: absolute; top: 5px; left: 8px; }
         .axis-line { width: 90%; height: 2px; background-color: #555; position: relative; margin-top: 15px; }
-        .axis-marker { width: 4px; height: 16px; background-color: #FF0000; position: absolute; left: 50%; top: -7px; transition: left 0.1s linear; box-shadow: 0 0 5px #FF0000; }
-        .data-value { font-size: 28px; font-weight: bold; color: #FFFF00; font-family: "Courier New", monospace; font-style: normal; margin-top: 5px; }
+        .axis-marker { width: 4px; height: 16px; background-color: var(--accent-color); position: absolute; left: 50%; top: -7px; transition: left 0.1s linear; }
+        .data-value { font-size: 28px; font-weight: bold; color: var(--text-color); font-family: var(--font-mono); margin-top: 5px; }
 
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #111; }
-        ::-webkit-scrollbar-thumb { background: #FF0000; border-radius: 3px; }
-
+        /* 导航覆盖层 */
         #nav-overlay-text {
             position: absolute; top: 40%; left:0; width:100%; text-align:center;
-            color: #FF00FF; font-weight: bold; font-size: 20px; 
-            text-shadow: 0 0 5px #FF00FF; pointer-events: none;
+            color: var(--accent-color); font-weight: bold; font-size: 24px; 
+            text-shadow: 0 0 5px rgba(0,0,0,0.5); pointer-events: none;
             display: none;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 0;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 3px; }
+
+        /* 风格选择器 */
+        .theme-select {
+            background: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--accent-color);
+            padding: 5px;
+            width: 100%;
+            margin-bottom: 10px;
+            font-family: var(--font-mono);
+            cursor: pointer;
         }
     </style>
 </head>
@@ -236,9 +301,16 @@
 
     <div class="main-container">
         <div class="panel-box">
-            <div class="panel-title">System Log</div>
+            <div class="panel-title">System & Log</div>
+            
+            <select id="theme-selector" class="theme-select" onchange="changeTheme(this.value)">
+                <option value="matlab">Style: MATLAB Retro</option>
+                <option value="cyberpunk">Style: Cyberpunk Neon</option>
+                <option value="clean">Style: Clean Lab</option>
+            </select>
+
             <div id="send-log" class="log-area">
-                <div>[System] V4.0 Engine Ready...</div>
+                <div>[System] V4.1 Engine Ready...</div>
                 <div>[Tip] Drag Map to Move</div>
                 <div>[Tip] Double Click to Nav</div>
             </div>
@@ -252,8 +324,8 @@
                 <button id="btn-connect" class="matlab-btn">LinkToBlueTooth</button>
             </div>
 
-            <div class="control-block" style="padding: 2px; border-color: #00FF00;">
-                <div style="color:#FFFF00; font-size:18px; margin-bottom:5px;">Interactive Trajectory Map</div>
+            <div class="control-block" style="padding: 2px;">
+                <div style="color:var(--text-color); font-size:18px; margin-bottom:5px;">Interactive Trajectory Map</div>
                 <div id="map-wrapper">
                     <canvas id="map-canvas"></canvas>
                     <div id="nav-overlay-text">AUTO NAVIGATION...</div>
@@ -269,9 +341,9 @@
                     </div>
                 </div>
                 <div style="display:flex; justify-content: space-between; margin-top:5px; padding: 0 10px;">
-                    <button onclick="resetView()" style="background:#222; color:#FFF; border:1px solid #555; cursor:pointer; width: 80px;">Reset View</button>
-                    <span style="font-size:12px; color:#888; font-family:'Courier New'; line-height:24px;">View: Isometric</span>
-                    <button onclick="clearMap()" style="background:#330000; color:#F00; border:1px solid #F00; cursor:pointer; width: 80px;">Reset Odom</button>
+                    <button onclick="resetView()" style="background:#444; color:#FFF; border:none; border-radius:4px; padding:5px 10px; cursor:pointer;">Reset View</button>
+                    <span style="font-size:12px; color:#888; font-family:'Courier New'; line-height:24px;">Isometric View</span>
+                    <button onclick="clearMap()" style="background:var(--accent-color); color:#fff; border:none; border-radius:4px; padding:5px 10px; cursor:pointer;">Reset Odom</button>
                 </div>
             </div>
 
@@ -291,7 +363,7 @@
                         <div id="pad-x" class="pad-btn func-btn" data-key="x">X(54)</div>
                     </div>
                     <div class="func-row">
-                        <div id="pad-c" class="pad-btn auto-btn" data-key="c">LineHome(C)</div>
+                        <div id="pad-c" class="pad-btn auto-btn" data-key="c">Home(C)</div>
                         <div id="pad-v" class="pad-btn auto-btn" data-key="v">Retrace(V)</div>
                     </div>
                 </div>
@@ -330,7 +402,7 @@
     </div>
 
     <script>
-        // --- 变量定义 ---
+        // --- 全局变量定义 ---
         const serviceUUID = 0xFFE0;
         let device;
         let writeCharacteristic = null;
@@ -358,7 +430,7 @@
         let autoInterval = null;
         let autoTargetIndex = -1; 
         let autoType = ''; 
-        let lastTrajIndex = -1; //  核心修复变量：记录上一次在轨迹的哪个索引
+        let lastTrajIndex = -1;
 
         // --- 视图变量 ---
         let viewScale = 0.2; 
@@ -372,6 +444,20 @@
         let isDragging = false;
         let lastMouseX = 0;
         let lastMouseY = 0;
+
+        // --- 样式管理 ---
+        function changeTheme(themeName) {
+            if (themeName === 'matlab') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', themeName);
+            }
+            drawFrame(); // 立即重绘地图以适应新颜色
+        }
+
+        function getThemeColor(varName) {
+            return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        }
 
         // 初始化
         function resizeCanvas() {
@@ -451,7 +537,6 @@
             const my = e.clientY - rect.top;
             const clickPos = screenToWorld(mx, my);
 
-            // 全局搜索目标索引 (点击是一次性的，全局搜索没问题)
             let targetIdx = -1;
             let minDist = 999999;
             for(let i = 0; i < trajectory.length; i++) {
@@ -464,25 +549,32 @@
             }
 
             if (minDist < 600) {
-                addLog(sendLogDiv, "Navigating to Idx:" + targetIdx, "#00FFFF");
+                addLog(sendLogDiv, "Navigating to Idx:" + targetIdx);
                 startPathFollow(targetIdx);
             } else {
-                addLog(sendLogDiv, "Too far from path!", "#FF0000");
+                addLog(sendLogDiv, "Too far from path!", "red");
             }
         });
 
-        // --- 绘图 ---
+        // --- 绘图 (已更新支持主题) ---
         function drawFrame() {
-            ctx.fillStyle = "#000000";
+            // 获取当前主题颜色
+            const bgColor = getThemeColor('--bg-color');
+            const gridColor = getThemeColor('--grid-color');
+            const textColor = getThemeColor('--text-color');
+            const accentColor = getThemeColor('--accent-color');
+
+            ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            drawGrid();
-            drawTrajectory3D();
-            drawAutoTarget(); 
+            
+            drawGrid(gridColor);
+            drawTrajectory3D(textColor, accentColor);
+            drawAutoTarget(accentColor); 
             drawRobot3D();
         }
 
-        function drawGrid() {
-            ctx.beginPath(); ctx.strokeStyle = "#222"; ctx.lineWidth = 1;
+        function drawGrid(color) {
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1;
             const gridSize = 1000; const range = 15; 
             const baseX = Math.floor((robotX - viewPanX) / gridSize) * gridSize;
             const baseY = Math.floor((robotY - viewPanY) / gridSize) * gridSize;
@@ -497,13 +589,13 @@
             }
             ctx.stroke();
             let origin = project3D(0, 0, 0);
-            ctx.fillStyle = "#F00"; ctx.fillRect(origin.x-3, origin.y-3, 6, 6);
+            ctx.fillStyle = getThemeColor('--accent-color'); ctx.fillRect(origin.x-3, origin.y-3, 6, 6);
         }
 
-        function drawTrajectory3D() {
+        function drawTrajectory3D(normalColor, autoColor) {
             if (trajectory.length < 2) return;
             ctx.beginPath();
-            ctx.strokeStyle = isAutoMode ? "#444" : "#00FF00"; 
+            ctx.strokeStyle = isAutoMode ? "#666" : getThemeColor('--highlight-color'); 
             ctx.lineWidth = 1.5; 
             let step = Math.ceil(trajectory.length / 1000); 
             let start = project3D(trajectory[0].x, trajectory[0].y, 0);
@@ -517,14 +609,14 @@
             ctx.stroke();
         }
 
-        function drawAutoTarget() {
+        function drawAutoTarget(color) {
             if (!isAutoMode || autoTargetIndex < 0 || autoTargetIndex >= trajectory.length) return;
             let t = trajectory[autoTargetIndex];
             let screenT = project3D(t.x, t.y, 0);
             let robotS = project3D(robotX, robotY, 0);
-            ctx.beginPath(); ctx.strokeStyle = "#FF00FF"; ctx.setLineDash([5, 5]);
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.setLineDash([5, 5]);
             ctx.moveTo(robotS.x, robotS.y); ctx.lineTo(screenT.x, screenT.y); ctx.stroke(); ctx.setLineDash([]);
-            ctx.strokeStyle = "#FFFF00"; ctx.lineWidth = 2; ctx.beginPath();
+            ctx.strokeStyle = getThemeColor('--text-color'); ctx.lineWidth = 2; ctx.beginPath();
             ctx.moveTo(screenT.x-8, screenT.y); ctx.lineTo(screenT.x+8, screenT.y);
             ctx.moveTo(screenT.x, screenT.y-8); ctx.lineTo(screenT.x, screenT.y+8);
             ctx.stroke();
@@ -533,6 +625,9 @@
         function drawRobot3D() {
             const s = 0.4; 
             const chassisL=250*s, chassisW=160*s, chassisH=60*s;
+            const accent = getThemeColor('--accent-color');
+            const textCol = getThemeColor('--text-color');
+
             function transform(lx, ly, lz) {
                 const rx = lx * Math.cos(robotYawRad) - ly * Math.sin(robotYawRad);
                 const ry = lx * Math.sin(robotYawRad) + ly * Math.cos(robotYawRad);
@@ -551,10 +646,18 @@
                 ctx.moveTo(pts[4].x, pts[4].y); ctx.lineTo(pts[5].x, pts[5].y); ctx.lineTo(pts[6].x, pts[6].y); ctx.lineTo(pts[7].x, pts[7].y); ctx.lineTo(pts[4].x, pts[4].y);
                 ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[4].x, pts[4].y); ctx.moveTo(pts[1].x, pts[1].y); ctx.lineTo(pts[5].x, pts[5].y);
                 ctx.moveTo(pts[2].x, pts[2].y); ctx.lineTo(pts[6].x, pts[6].y); ctx.moveTo(pts[3].x, pts[3].y); ctx.lineTo(pts[7].x, pts[7].y);
-                ctx.stroke(); ctx.fillStyle = color + "33"; ctx.fill();
+                ctx.stroke(); 
+                
+                // 半透明填充
+                // 将 hex 颜色转为 rgba (简单处理，假设 hex 为 #RRGGBB)
+                ctx.fillStyle = color + "33"; 
+                ctx.fill();
             }
-            drawBox(0, 0, 5, chassisL, chassisW, chassisH, "#00FFFF"); 
-            ctx.beginPath(); ctx.strokeStyle = "#FFFF00";
+            // 机器人主体使用文本色（高对比度）
+            drawBox(0, 0, 5, chassisL, chassisW, chassisH, textCol); 
+            
+            // 机器人朝向指示使用强调色
+            ctx.beginPath(); ctx.strokeStyle = accent; ctx.lineWidth = 2;
             const hS = transform(0, 0, chassisH+2); const hE = transform(chassisL, 0, chassisH+2);
             ctx.moveTo(hS.x, hS.y); ctx.lineTo(hE.x, hE.y); ctx.stroke();
         }
@@ -623,7 +726,7 @@
             isAutoMode = true;
             autoType = 'PATH_FOLLOW';
             autoTargetIndex = index;
-            lastTrajIndex = -1; // Reset memory
+            lastTrajIndex = -1; 
             
             document.getElementById('nav-overlay-text').style.display = 'block';
             document.getElementById('mode-nav').classList.add('active');
@@ -634,13 +737,13 @@
             stopAuto(false);
             isAutoMode = true;
             autoType = 'STRAIGHT';
-            addLog(sendLogDiv, "Line Return Start", "#FF00FF");
+            addLog(sendLogDiv, "Line Return Start");
             autoInterval = setInterval(autoControlLoop, 100);
         }
         
         function startFullRetrace() {
             if (trajectory.length > 0) startPathFollow(0); 
-            else addLog(sendLogDiv, "No Path to Retrace!", "#FF0000");
+            else addLog(sendLogDiv, "No Path to Retrace!", "red");
         }
 
         function stopAuto(stopRobot = true) {
@@ -650,7 +753,7 @@
             if (stopRobot) sendByte(0);
             document.getElementById('nav-overlay-text').style.display = 'none';
             document.getElementById('mode-nav').classList.remove('active');
-            addLog(sendLogDiv, "Stopped", "#FFFF00");
+            addLog(sendLogDiv, "Stopped");
             drawFrame();
         }
 
@@ -658,7 +761,7 @@
             stopAuto(true); sendByte(0);
         }
 
-        // *** 控制循环 (引入窗口搜索，彻底解决打转) ***
+        // *** 控制循环 ***
         function autoControlLoop() {
             let targetX, targetY;
             const LookAheadDist = 300; 
@@ -667,8 +770,6 @@
                 let closestDist = Infinity;
                 let currentIndex = -1;
                 
-                // 窗口搜索逻辑：只在上次位置的附近 +/- 500 个点内搜索
-                // 如果是第一次运行 (lastTrajIndex == -1)，则全图搜索
                 let searchStart = 0;
                 let searchEnd = trajectory.length;
 
@@ -685,18 +786,15 @@
                     }
                 }
                 
-                // 更新记忆
                 if (currentIndex !== -1) lastTrajIndex = currentIndex;
 
-                // 判断到达：距离小于40mm
                 let distToTarget = Math.hypot(trajectory[autoTargetIndex].x - robotX, trajectory[autoTargetIndex].y - robotY);
                 if (distToTarget < 40) {
-                    addLog(sendLogDiv, "Arrived!", "#00FF00");
+                    addLog(sendLogDiv, "Arrived!");
                     stopAuto(true);
                     return;
                 }
 
-                // 终点强制锁定逻辑
                 if (distToTarget < LookAheadDist) {
                     targetX = trajectory[autoTargetIndex].x;
                     targetY = trajectory[autoTargetIndex].y;
@@ -720,7 +818,7 @@
             else if (autoType === 'STRAIGHT') {
                 targetX = 0; targetY = 0;
                 if (Math.hypot(robotX, robotY) < 40) {
-                    addLog(sendLogDiv, "Home Reached", "#00FF00");
+                    addLog(sendLogDiv, "Home Reached");
                     stopAuto(true); return;
                 }
             }
@@ -744,10 +842,10 @@
         // --- 蓝牙与按键 ---
         connectBtn.addEventListener('click', async () => {
             try {
-                addLog(sendLogDiv, "Searching...", "#FFFF00");
+                addLog(sendLogDiv, "Searching...");
                 device = await navigator.bluetooth.requestDevice({ filters: [{ services: [serviceUUID] }] });
                 const server = await device.gatt.connect();
-                addLog(sendLogDiv, "Connected", "#00FF00");
+                addLog(sendLogDiv, "Connected");
                 const service = await server.getPrimaryService(serviceUUID);
                 const characteristics = await service.getCharacteristics();
                 for (const c of characteristics) {
@@ -755,9 +853,9 @@
                     if (c.properties.write || c.properties.writeWithoutResponse) writeCharacteristic = c;
                 }
                 if (writeCharacteristic) {
-                    connectBtn.innerText = "LINKED"; connectBtn.style.backgroundColor = "#228B22"; connectBtn.disabled = true;
+                    connectBtn.innerText = "LINKED"; connectBtn.style.backgroundColor = "green"; connectBtn.disabled = true;
                 }
-            } catch (error) { addLog(sendLogDiv, "Err: " + error, "#FF0000"); }
+            } catch (error) { addLog(sendLogDiv, "Err: " + error, "red"); }
         });
 
         async function sendByte(value) {
@@ -769,10 +867,13 @@
             } catch (error) { } 
         }
 
-        function addLog(element, msg, color="#00FF00") {
+        function addLog(element, msg, color=null) {
             const now = new Date().toLocaleTimeString();
             if (element.childElementCount > 30) element.removeChild(element.lastChild);
-            element.innerHTML = `<div style="color:${color}">[${now}] ${msg}</div>` + element.innerHTML;
+            // 如果没有指定颜色，使用当前主题的默认高亮色
+            const finalColor = color ? color : "";
+            const styleStr = finalColor ? `style="color:${finalColor}"` : "";
+            element.innerHTML = `<div ${styleStr}>[${now}] ${msg}</div>` + element.innerHTML;
         }
 
         function handleMove(cmd) { sendByte(cmd); }
@@ -789,7 +890,7 @@
             sendByte(isToggledE?7:8); 
             document.getElementById('mode-feat').classList.toggle('active', isToggledE);
             document.getElementById('pad-e').classList.toggle('toggled-on', isToggledE);
-            addLog(sendLogDiv, "Mode E: " + (isToggledE ? "ON" : "OFF"), "#FFFF00");
+            addLog(sendLogDiv, "Mode E: " + (isToggledE ? "ON" : "OFF"));
         }
 
         window.addEventListener('keydown', (e) => {
