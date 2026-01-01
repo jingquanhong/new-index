@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>MATLAB 机器人 3D 监控终端 (双模返航版)</title>
+    <title>MATLAB 机器人 3D 智能地面站 (V4.0 稳定版)</title>
     <style>
-        /* --- 全局风格设置 (复刻 MATLAB 界面) --- */
+        /* --- 全局风格设置 (MATLAB 复古风) --- */
         body {
             background-color: #000000;
             color: #FFFF00;
@@ -14,7 +14,7 @@
             margin: 0;
             padding: 10px;
             overflow: hidden; 
-            touch-action: manipulation;
+            touch-action: none; 
         }
 
         h1, h2, h3 { margin: 5px 0; font-weight: normal; }
@@ -37,7 +37,7 @@
             }
             body { overflow: auto; }
             .panel-box, .center-panel { margin-bottom: 20px; }
-            #map-wrapper { height: 350px; }
+            #map-wrapper { height: 400px; }
         }
 
         .panel-box {
@@ -49,7 +49,6 @@
             box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
             display: flex;
             flex-direction: column;
-            justify-content: flex-start; 
         }
 
         .panel-title {
@@ -68,18 +67,18 @@
             border: 1px solid #333;
             color: #00FF00;
             font-family: "Consolas", monospace;
-            font-style: normal;
             font-size: 12px;
+            font-style: normal;
             overflow-y: auto;
             padding: 5px;
             text-align: left;
+            height: 150px;
         }
 
         .center-panel {
             display: flex;
             flex-direction: column;
             gap: 10px;
-            overflow-y: auto;
             padding-right: 5px;
         }
 
@@ -112,18 +111,18 @@
 
         #map-wrapper {
             width: 100%;
-            height: 320px;
-            background: #000;
+            height: 380px;
             background: radial-gradient(circle, #111 0%, #000 100%);
             position: relative;
             border-radius: 5px;
             overflow: hidden;
             border: 1px solid #444;
+            cursor: crosshair;
         }
         canvas {
             width: 100%;
             height: 100%;
-            cursor: move;
+            display: block;
         }
         .map-overlay-data {
             position: absolute;
@@ -137,6 +136,18 @@
             padding: 4px;
             border: 1px solid #333;
             pointer-events: none;
+        }
+        .map-overlay-help {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            font-style: normal;
+            color: #888;
+            text-align: right;
+            pointer-events: none;
+            line-height: 1.4;
         }
 
         .d-pad-container {
@@ -167,12 +178,16 @@
             color: #000;
             box-shadow: 0 0 10px #FF0000;
         }
+        
+        .pad-btn.toggled-on {
+            background-color: #440000;
+            border-color: #FF8800;
+            box-shadow: inset 0 0 10px #FF0000;
+            color: #FF8800;
+        }
 
-        /* 调整布局支持两行功能键 */
         .func-row { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 2px; }
         .func-btn { flex: 1; background: #220000; font-size: 18px; }
-        
-        /* 自动驾驶按键特别颜色 */
         .auto-btn { background-color: #330000; border-color: #AA0000; font-size: 16px; font-family: "Courier New"; }
 
         .mode-list {
@@ -209,26 +224,23 @@
         ::-webkit-scrollbar-track { background: #111; }
         ::-webkit-scrollbar-thumb { background: #FF0000; border-radius: 3px; }
 
-        /* 返航遮罩 */
-        #rth-overlay {
-            position: absolute; top:0; left:0; width:100%; height:100%;
-            background: rgba(255,0,0,0.2);
-            display: flex; justify-content: center; align-items: center;
-            color: #FFF; font-size: 24px; font-weight: bold;
-            pointer-events: none; opacity: 0; transition: opacity 0.3s;
-            z-index: 10;
-            flex-direction: column;
+        #nav-overlay-text {
+            position: absolute; top: 40%; left:0; width:100%; text-align:center;
+            color: #FF00FF; font-weight: bold; font-size: 20px; 
+            text-shadow: 0 0 5px #FF00FF; pointer-events: none;
+            display: none;
         }
     </style>
 </head>
 <body>
 
     <div class="main-container">
-        
         <div class="panel-box">
             <div class="panel-title">System Log</div>
             <div id="send-log" class="log-area">
-                <div>[System] 3D Engine Ready...</div>
+                <div>[System] V4.0 Engine Ready...</div>
+                <div>[Tip] Drag Map to Move</div>
+                <div>[Tip] Double Click to Nav</div>
             </div>
             <div style="margin-top: 10px;">
                 <button id="btn-stop" class="matlab-btn" onclick="emergencyStop()">EMERGENCY STOP</button>
@@ -236,28 +248,30 @@
         </div>
 
         <div class="center-panel">
-            
             <div class="control-block" style="border: none; background: transparent; padding: 0;">
                 <button id="btn-connect" class="matlab-btn">LinkToBlueTooth</button>
             </div>
 
             <div class="control-block" style="padding: 2px; border-color: #00FF00;">
-                <div style="color:#FFFF00; font-size:18px; margin-bottom:5px;">3D Trajectory Visualization</div>
+                <div style="color:#FFFF00; font-size:18px; margin-bottom:5px;">Interactive Trajectory Map</div>
                 <div id="map-wrapper">
                     <canvas id="map-canvas"></canvas>
-                    <div id="rth-overlay">
-                        <div id="rth-status">AUTO PILOT</div>
-                        <div style="font-size:14px; color:#FFFF00;" id="rth-sub"></div>
-                    </div>
+                    <div id="nav-overlay-text">AUTO NAVIGATION...</div>
                     <div class="map-overlay-data">
                         X: <span id="txt-odom-x">0.00</span> m<br>
                         Y: <span id="txt-odom-y">0.00</span> m<br>
-                        Yaw: <span id="txt-odom-yaw">0.0</span>°
+                        Yaw: <span id="txt-odom-yaw">0.0</span>°<br>
+                        Zoom: <span id="txt-zoom">0.20</span>x
+                    </div>
+                    <div class="map-overlay-help">
+                        Double Click: Navigate<br>
+                        Scroll: Zoom | Drag: Pan
                     </div>
                 </div>
                 <div style="display:flex; justify-content: space-between; margin-top:5px; padding: 0 10px;">
-                    <span style="font-size:12px; color:#888; font-family:'Courier New'">View: Isometric 3D</span>
-                    <button onclick="clearMap()" style="background:#330000; color:#F00; border:1px solid #F00; cursor:pointer;">Reset Odom</button>
+                    <button onclick="resetView()" style="background:#222; color:#FFF; border:1px solid #555; cursor:pointer; width: 80px;">Reset View</button>
+                    <span style="font-size:12px; color:#888; font-family:'Courier New'; line-height:24px;">View: Isometric</span>
+                    <button onclick="clearMap()" style="background:#330000; color:#F00; border:1px solid #F00; cursor:pointer; width: 80px;">Reset Odom</button>
                 </div>
             </div>
 
@@ -286,8 +300,9 @@
             <div class="control-block">
                 <ul class="mode-list">
                     <li id="mode-remote" class="active">Remote (WASD)</li>
-                    <li id="mode-voice">Mode Q (Toggle)</li>
-                    <li id="mode-rth">Auto Return (Running)</li>
+                    <li id="mode-voice">Mode Q (Voice)</li>
+                    <li id="mode-feat">Mode E (Feature)</li>
+                    <li id="mode-nav">Auto Navigation (Run)</li>
                 </ul>
             </div>
         </div>
@@ -300,13 +315,11 @@
                     <div class="axis-line"><div id="marker-l" class="axis-marker"></div></div>
                     <div id="val-l" class="data-value">0</div>
                 </div>
-                
                 <div class="gauge-box">
                     <div class="gauge-label">R-Speed (mm/s)</div>
                     <div class="axis-line"><div id="marker-r" class="axis-marker"></div></div>
                     <div id="val-r" class="data-value">0</div>
                 </div>
-
                 <div class="gauge-box">
                     <div class="gauge-label">Yaw (Deg)</div>
                     <div class="axis-line"><div id="marker-yaw" class="axis-marker"></div></div>
@@ -314,11 +327,10 @@
                 </div>
             </div>
         </div>
-
     </div>
 
     <script>
-        // --- 蓝牙与变量 ---
+        // --- 变量定义 ---
         const serviceUUID = 0xFFE0;
         let device;
         let writeCharacteristic = null;
@@ -329,70 +341,151 @@
         const connectBtn = document.getElementById('btn-connect');
         const sendLogDiv = document.getElementById('send-log');
 
-        // --- 3D 引擎与里程计核心变量 ---
         const canvas = document.getElementById('map-canvas');
         const ctx = canvas.getContext('2d');
+        const mapWrapper = document.getElementById('map-wrapper');
         
-        let robotX = 0; // 全局坐标 X (mm)
-        let robotY = 0; // 全局坐标 Y (mm)
-        let robotYawRad = 0; // 全局角度 (弧度)
+        let robotX = 0; 
+        let robotY = 0; 
+        let robotYawRad = 0; 
         let lastTimestamp = 0; 
         
-        const ROBOT_TRACK_WIDTH = 200; // 轮距 200mm
-        const TRAJECTORY_MAX_POINTS = 2000; // 增加点数以支持更长路径
-        let trajectory = []; // 存储 {x, y}
+        const TRAJECTORY_MAX_POINTS = 5000; 
+        let trajectory = []; 
 
-        // 自动返航控制变量
-        let isAutoRTH = false;
-        let rthInterval = null;
-        let rthMode = 'STRAIGHT'; // 'STRAIGHT' or 'RETRACE'
-        let rthPhase = 0; // 0: 移动归零, 1: 角度归零
-        let rthRetraceIndex = -1;
+        // --- 自动功能变量 ---
+        let isAutoMode = false;
+        let autoInterval = null;
+        let autoTargetIndex = -1; 
+        let autoType = ''; 
+        let lastTrajIndex = -1; //  核心修复变量：记录上一次在轨迹的哪个索引
 
-        // 视图设置
-        const ISO_ANGLE = 30 * (Math.PI / 180); 
-        let viewScale = 0.5; 
+        // --- 视图变量 ---
+        let viewScale = 0.2; 
+        let viewPanX = 0; 
+        let viewPanY = 0; 
         
-        // 初始化 Canvas
+        const ISO_ANGLE = 30 * (Math.PI / 180); 
+        const SIN_ISO = Math.sin(ISO_ANGLE);
+        const COS_ISO = Math.cos(ISO_ANGLE);
+
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        // 初始化
         function resizeCanvas() {
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
+            canvas.width = mapWrapper.clientWidth;
+            canvas.height = mapWrapper.clientHeight;
             drawFrame();
         }
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 100);
 
-        // --- 3D 投影函数 ---
+        function resetView() {
+            viewScale = 0.2;
+            viewPanX = 0;
+            viewPanY = 0;
+            updateUIOverlay();
+            drawFrame();
+        }
+
+        // --- 坐标系统 ---
         function project3D(x, y, z) {
-            const offsetX = -robotX; 
-            const offsetY = -robotY;
-            let wx = x + offsetX;
-            let wy = y + offsetY;
-            let screenX = (wx - wy) * Math.cos(ISO_ANGLE);
-            let screenY = (wx + wy) * Math.sin(ISO_ANGLE) - z;
+            const relX = x - robotX + viewPanX;
+            const relY = y - robotY + viewPanY;
+            let screenX = (relX - relY) * COS_ISO;
+            let screenY = (relX + relY) * SIN_ISO - z;
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
             return { x: cx + screenX * viewScale, y: cy + screenY * viewScale };
         }
 
-        // --- 绘图核心 ---
+        function screenToWorld(sx, sy) {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            let unscaledX = (sx - cx) / viewScale;
+            let unscaledY = (sy - cy) / viewScale; 
+            let A = unscaledX / COS_ISO;
+            let B = unscaledY / SIN_ISO;
+            let relX = (A + B) / 2;
+            let relY = (B - A) / 2;
+            let worldX = relX + robotX - viewPanX;
+            let worldY = relY + robotY - viewPanY;
+            return { x: worldX, y: worldY };
+        }
+
+        // --- 交互 ---
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.001;
+            viewScale -= e.deltaY * zoomSpeed * viewScale; 
+            viewScale = Math.max(0.02, Math.min(viewScale, 2.0));
+            updateUIOverlay();
+            drawFrame();
+        }, { passive: false });
+
+        function startDrag(x, y) {
+            isDragging = true; lastMouseX = x; lastMouseY = y; canvas.style.cursor = "grabbing";
+        }
+        function moveDrag(x, y) {
+            if (!isDragging) return;
+            const dx = x - lastMouseX; const dy = y - lastMouseY;
+            const panFactor = 1 / viewScale; 
+            viewPanX += (dx + dy) * panFactor * 0.5;
+            viewPanY += (dy - dx) * panFactor * 0.5;
+            lastMouseX = x; lastMouseY = y;
+            drawFrame();
+        }
+        canvas.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+        window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+        window.addEventListener('mouseup', () => { isDragging = false; canvas.style.cursor = "crosshair"; });
+        canvas.addEventListener('touchstart', e => { if(e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY); });
+        canvas.addEventListener('touchmove', e => { if(e.touches.length === 1) { e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); } }, { passive: false });
+        window.addEventListener('touchend', () => isDragging = false);
+
+        // --- 双击导航 ---
+        canvas.addEventListener('dblclick', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            const clickPos = screenToWorld(mx, my);
+
+            // 全局搜索目标索引 (点击是一次性的，全局搜索没问题)
+            let targetIdx = -1;
+            let minDist = 999999;
+            for(let i = 0; i < trajectory.length; i++) {
+                let p = trajectory[i];
+                let d = Math.hypot(p.x - clickPos.x, p.y - clickPos.y);
+                if (d < minDist) {
+                    minDist = d;
+                    targetIdx = i;
+                }
+            }
+
+            if (minDist < 600) {
+                addLog(sendLogDiv, "Navigating to Idx:" + targetIdx, "#00FFFF");
+                startPathFollow(targetIdx);
+            } else {
+                addLog(sendLogDiv, "Too far from path!", "#FF0000");
+            }
+        });
+
+        // --- 绘图 ---
         function drawFrame() {
             ctx.fillStyle = "#000000";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             drawGrid();
             drawTrajectory3D();
-            drawRTHVisuals(); 
+            drawAutoTarget(); 
             drawRobot3D();
         }
 
         function drawGrid() {
-            ctx.beginPath();
-            ctx.strokeStyle = "#333333";
-            ctx.lineWidth = 1;
-            const gridSize = 500;
-            const range = 5;
-            const baseX = Math.floor(robotX / gridSize) * gridSize;
-            const baseY = Math.floor(robotY / gridSize) * gridSize;
+            ctx.beginPath(); ctx.strokeStyle = "#222"; ctx.lineWidth = 1;
+            const gridSize = 1000; const range = 15; 
+            const baseX = Math.floor((robotX - viewPanX) / gridSize) * gridSize;
+            const baseY = Math.floor((robotY - viewPanY) / gridSize) * gridSize;
 
             for(let i = -range; i <= range; i++) {
                 let p1 = project3D(baseX - range*gridSize, baseY + i*gridSize, 0);
@@ -403,75 +496,50 @@
                 ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
             }
             ctx.stroke();
-            
-            // 绘制原点
             let origin = project3D(0, 0, 0);
-            ctx.fillStyle = "#FF0000";
-            ctx.fillRect(origin.x-3, origin.y-3, 6, 6);
+            ctx.fillStyle = "#F00"; ctx.fillRect(origin.x-3, origin.y-3, 6, 6);
         }
 
         function drawTrajectory3D() {
             if (trajectory.length < 2) return;
             ctx.beginPath();
-            ctx.strokeStyle = isAutoRTH ? "#333" : "#00FF00"; 
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = isAutoMode ? "#444" : "#00FF00"; 
+            ctx.lineWidth = 1.5; 
+            let step = Math.ceil(trajectory.length / 1000); 
             let start = project3D(trajectory[0].x, trajectory[0].y, 0);
             ctx.moveTo(start.x, start.y);
-            for (let i = 1; i < trajectory.length; i++) {
+            for (let i = 1; i < trajectory.length; i+=step) {
                 let p = project3D(trajectory[i].x, trajectory[i].y, 0);
                 ctx.lineTo(p.x, p.y);
             }
+            let last = project3D(trajectory[trajectory.length-1].x, trajectory[trajectory.length-1].y, 0);
+            ctx.lineTo(last.x, last.y);
             ctx.stroke();
         }
 
-        // 绘制返航辅助线
-        function drawRTHVisuals() {
-            if (!isAutoRTH) return;
-            
-            let robot = project3D(robotX, robotY, 0);
-            let targetPos = {x: 0, y: 0};
-
-            // 1. 直线返航模式：画一条直通原点的线
-            if (rthMode === 'STRAIGHT') {
-                targetPos = project3D(0, 0, 0);
-                ctx.beginPath();
-                ctx.strokeStyle = rthPhase === 0 ? "#FFFF00" : "#00FFFF";
-                ctx.setLineDash([10, 10]);
-                ctx.lineWidth = 3;
-                ctx.moveTo(robot.x, robot.y);
-                ctx.lineTo(targetPos.x, targetPos.y);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            } 
-            // 2. 原路返回模式：画一条连向下一个轨迹点的线
-            else if (rthMode === 'RETRACE' && rthRetraceIndex >= 0) {
-                let t = trajectory[rthRetraceIndex];
-                if(t) {
-                    targetPos = project3D(t.x, t.y, 0);
-                    ctx.beginPath();
-                    ctx.strokeStyle = "#FF00FF";
-                    ctx.setLineDash([5, 5]);
-                    ctx.lineWidth = 2;
-                    ctx.moveTo(robot.x, robot.y);
-                    ctx.lineTo(targetPos.x, targetPos.y);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                    // 目标点高亮
-                    ctx.fillStyle = "#FF00FF";
-                    ctx.beginPath(); ctx.arc(targetPos.x, targetPos.y, 4, 0, Math.PI*2); ctx.fill();
-                }
-            }
+        function drawAutoTarget() {
+            if (!isAutoMode || autoTargetIndex < 0 || autoTargetIndex >= trajectory.length) return;
+            let t = trajectory[autoTargetIndex];
+            let screenT = project3D(t.x, t.y, 0);
+            let robotS = project3D(robotX, robotY, 0);
+            ctx.beginPath(); ctx.strokeStyle = "#FF00FF"; ctx.setLineDash([5, 5]);
+            ctx.moveTo(robotS.x, robotS.y); ctx.lineTo(screenT.x, screenT.y); ctx.stroke(); ctx.setLineDash([]);
+            ctx.strokeStyle = "#FFFF00"; ctx.lineWidth = 2; ctx.beginPath();
+            ctx.moveTo(screenT.x-8, screenT.y); ctx.lineTo(screenT.x+8, screenT.y);
+            ctx.moveTo(screenT.x, screenT.y-8); ctx.lineTo(screenT.x, screenT.y+8);
+            ctx.stroke();
         }
 
         function drawRobot3D() {
-            const chassisL=250, chassisW=160, chassisH=60, wheelR=40, wheelW=20;
+            const s = 0.4; 
+            const chassisL=250*s, chassisW=160*s, chassisH=60*s;
             function transform(lx, ly, lz) {
                 const rx = lx * Math.cos(robotYawRad) - ly * Math.sin(robotYawRad);
                 const ry = lx * Math.sin(robotYawRad) + ly * Math.cos(robotYawRad);
                 return project3D(robotX + rx, robotY + ry, lz);
             }
             function drawBox(cx, cy, cz, L, W, H, color) {
-                ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
+                ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
                 const dx=L/2, dy=W/2, dz=H;
                 const pts = [
                     transform(cx-dx, cy-dy, cz), transform(cx+dx, cy-dy, cz),
@@ -485,11 +553,9 @@
                 ctx.moveTo(pts[2].x, pts[2].y); ctx.lineTo(pts[6].x, pts[6].y); ctx.moveTo(pts[3].x, pts[3].y); ctx.lineTo(pts[7].x, pts[7].y);
                 ctx.stroke(); ctx.fillStyle = color + "33"; ctx.fill();
             }
-            drawBox(0, 200/2, 0, 80, 20, 80, "#FF00FF"); 
-            drawBox(0, -200/2, 0, 80, 20, 80, "#FF00FF");
-            drawBox(0, 0, 10, 250, 160, 60, "#00FFFF"); 
+            drawBox(0, 0, 5, chassisL, chassisW, chassisH, "#00FFFF"); 
             ctx.beginPath(); ctx.strokeStyle = "#FFFF00";
-            const hS = transform(125, 0, 70); const hE = transform(225, 0, 70);
+            const hS = transform(0, 0, chassisH+2); const hE = transform(chassisL, 0, chassisH+2);
             ctx.moveTo(hS.x, hS.y); ctx.lineTo(hE.x, hE.y); ctx.stroke();
         }
 
@@ -516,16 +582,14 @@
             const dy = vCenter * Math.sin(robotYawRad) * dt;
             robotX += dx; robotY += dy;
 
-            // 记录轨迹 (仅非返航模式记录)
-            if (!isAutoRTH) {
+            if (!isAutoMode) {
                 const lastPt = trajectory[trajectory.length - 1];
-                // 采样距离阈值 50mm
                 if (!lastPt || Math.hypot(robotX - lastPt.x, robotY - lastPt.y) > 50) {
                     trajectory.push({x: robotX, y: robotY});
                     if (trajectory.length > TRAJECTORY_MAX_POINTS) trajectory.shift();
                 }
             }
-            updateOdomText();
+            updateUIOverlay();
             drawFrame();
         }
 
@@ -539,23 +603,147 @@
             document.getElementById('marker-yaw').style.left = mapPct(yaw, -180, 180);
         }
 
-        function updateOdomText() {
+        function updateUIOverlay() {
             document.getElementById('txt-odom-x').innerText = (robotX / 1000).toFixed(2);
             document.getElementById('txt-odom-y').innerText = (robotY / 1000).toFixed(2);
             document.getElementById('txt-odom-yaw').innerText = (robotYawRad * (180/Math.PI)).toFixed(1);
+            document.getElementById('txt-zoom').innerText = viewScale.toFixed(2);
         }
 
         function clearMap() {
-            emergencyStop(); 
-            robotX = 0; robotY = 0; robotYawRad = 0;
-            trajectory = []; lastTimestamp = 0;
-            updateOdomText(); drawFrame();
+            emergencyStop(); robotX = 0; robotY = 0; robotYawRad = 0; trajectory = []; lastTimestamp = 0; resetView();
         }
 
-        // --- 蓝牙连接 ---
+        // --- 核心控制算法 (V4.0 稳定版) ---
+        
+        function startPathFollow(index) {
+            stopAuto(false);
+            if (index < 0 || index >= trajectory.length) return;
+            
+            isAutoMode = true;
+            autoType = 'PATH_FOLLOW';
+            autoTargetIndex = index;
+            lastTrajIndex = -1; // Reset memory
+            
+            document.getElementById('nav-overlay-text').style.display = 'block';
+            document.getElementById('mode-nav').classList.add('active');
+            autoInterval = setInterval(autoControlLoop, 100);
+        }
+
+        function startLineHome() {
+            stopAuto(false);
+            isAutoMode = true;
+            autoType = 'STRAIGHT';
+            addLog(sendLogDiv, "Line Return Start", "#FF00FF");
+            autoInterval = setInterval(autoControlLoop, 100);
+        }
+        
+        function startFullRetrace() {
+            if (trajectory.length > 0) startPathFollow(0); 
+            else addLog(sendLogDiv, "No Path to Retrace!", "#FF0000");
+        }
+
+        function stopAuto(stopRobot = true) {
+            if (!isAutoMode) return;
+            isAutoMode = false;
+            clearInterval(autoInterval);
+            if (stopRobot) sendByte(0);
+            document.getElementById('nav-overlay-text').style.display = 'none';
+            document.getElementById('mode-nav').classList.remove('active');
+            addLog(sendLogDiv, "Stopped", "#FFFF00");
+            drawFrame();
+        }
+
+        function emergencyStop() {
+            stopAuto(true); sendByte(0);
+        }
+
+        // *** 控制循环 (引入窗口搜索，彻底解决打转) ***
+        function autoControlLoop() {
+            let targetX, targetY;
+            const LookAheadDist = 300; 
+
+            if (autoType === 'PATH_FOLLOW') {
+                let closestDist = Infinity;
+                let currentIndex = -1;
+                
+                // 窗口搜索逻辑：只在上次位置的附近 +/- 500 个点内搜索
+                // 如果是第一次运行 (lastTrajIndex == -1)，则全图搜索
+                let searchStart = 0;
+                let searchEnd = trajectory.length;
+
+                if (lastTrajIndex !== -1) {
+                    searchStart = Math.max(0, lastTrajIndex - 500);
+                    searchEnd = Math.min(trajectory.length, lastTrajIndex + 500);
+                }
+
+                for (let i = searchStart; i < searchEnd; i++) {
+                    let d = Math.hypot(trajectory[i].x - robotX, trajectory[i].y - robotY);
+                    if (d < closestDist) {
+                        closestDist = d;
+                        currentIndex = i;
+                    }
+                }
+                
+                // 更新记忆
+                if (currentIndex !== -1) lastTrajIndex = currentIndex;
+
+                // 判断到达：距离小于40mm
+                let distToTarget = Math.hypot(trajectory[autoTargetIndex].x - robotX, trajectory[autoTargetIndex].y - robotY);
+                if (distToTarget < 40) {
+                    addLog(sendLogDiv, "Arrived!", "#00FF00");
+                    stopAuto(true);
+                    return;
+                }
+
+                // 终点强制锁定逻辑
+                if (distToTarget < LookAheadDist) {
+                    targetX = trajectory[autoTargetIndex].x;
+                    targetY = trajectory[autoTargetIndex].y;
+                } else {
+                    let direction = (autoTargetIndex > currentIndex) ? 1 : -1;
+                    let lookaheadIdx = autoTargetIndex; 
+                    let i = currentIndex;
+                    while (i >= 0 && i < trajectory.length) {
+                        let d = Math.hypot(trajectory[i].x - robotX, trajectory[i].y - robotY);
+                        if (d > LookAheadDist) {
+                            lookaheadIdx = i;
+                            break;
+                        }
+                        if (i === autoTargetIndex) break;
+                        i += direction;
+                    }
+                    targetX = trajectory[lookaheadIdx].x;
+                    targetY = trajectory[lookaheadIdx].y;
+                }
+            } 
+            else if (autoType === 'STRAIGHT') {
+                targetX = 0; targetY = 0;
+                if (Math.hypot(robotX, robotY) < 40) {
+                    addLog(sendLogDiv, "Home Reached", "#00FF00");
+                    stopAuto(true); return;
+                }
+            }
+
+            const dx = targetX - robotX;
+            const dy = targetY - robotY;
+            const targetAngle = Math.atan2(dy, dx);
+            let angleDiff = targetAngle - robotYawRad;
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+            if (Math.abs(angleDiff) > 0.4) {
+                if (angleDiff > 0) sendByte(3); 
+                else sendByte(4); 
+            } else {
+                sendByte(1); 
+            }
+            drawFrame();
+        }
+
+        // --- 蓝牙与按键 ---
         connectBtn.addEventListener('click', async () => {
             try {
-                writeCharacteristic = null;
                 addLog(sendLogDiv, "Searching...", "#FFFF00");
                 device = await navigator.bluetooth.requestDevice({ filters: [{ services: [serviceUUID] }] });
                 const server = await device.gatt.connect();
@@ -587,177 +775,39 @@
             element.innerHTML = `<div style="color:${color}">[${now}] ${msg}</div>` + element.innerHTML;
         }
 
-        // --- 自动返航逻辑 (核心修改) ---
+        function handleMove(cmd) { sendByte(cmd); }
         
-        function startRTH(mode) {
-            if (isAutoRTH) return; 
-            if (Math.hypot(robotX, robotY) < 50) { addLog(sendLogDiv, "Already Home!", "#00FF00"); return; }
-            if (mode === 'RETRACE' && trajectory.length === 0) { addLog(sendLogDiv, "No Trajectory!", "#FF0000"); return; }
-
-            isAutoRTH = true;
-            rthMode = mode;
-            rthPhase = 0; // Phase 0: 移动
-            rthRetraceIndex = trajectory.length - 1; // 原路返回从数组末尾开始
-
-            document.getElementById('rth-overlay').style.opacity = 1;
-            document.getElementById('rth-status').innerText = (mode==='STRAIGHT' ? "LINE RETURN" : "RETRACE RETURN");
-            document.getElementById('rth-sub').innerText = "PHASE 1: MOVING";
-            document.getElementById('mode-rth').classList.add('active');
-            
-            addLog(sendLogDiv, mode + " START", "#FF00FF");
-
-            if (rthInterval) clearInterval(rthInterval);
-            rthInterval = setInterval(rthLoop, 100);
+        function toggleQ() { 
+            isToggledQ = !isToggledQ; 
+            sendByte(isToggledQ?5:6); 
+            document.getElementById('mode-voice').classList.toggle('active', isToggledQ); 
+            document.getElementById('pad-q').classList.toggle('toggled-on', isToggledQ);
         }
 
-        function stopRTH(shouldStopRobot = true) {
-            if (!isAutoRTH) return;
-            isAutoRTH = false;
-            if (rthInterval) clearInterval(rthInterval);
-            
-            if (shouldStopRobot) sendByte(0); 
-
-            document.getElementById('rth-overlay').style.opacity = 0;
-            document.getElementById('mode-rth').classList.remove('active');
-            addLog(sendLogDiv, "RTH STOPPED", "#FFFF00");
-        }
-
-        function emergencyStop() {
-            stopRTH(true);
-            sendByte(0);
-        }
-
-        function rthLoop() {
-            // --- Phase 0: 移动归零 (Movement) ---
-            if (rthPhase === 0) {
-                let targetX = 0, targetY = 0;
-
-                if (rthMode === 'STRAIGHT') {
-                    // 直线模式：目标是原点
-                    targetX = 0; 
-                    targetY = 0;
-                    
-                    // 检查是否到达原点
-                    if (Math.hypot(robotX, robotY) < 150) { 
-                        enterAlignPhase();
-                        return;
-                    }
-                } 
-                else if (rthMode === 'RETRACE') {
-                    // 原路模式：目标是数组中的点
-                    if (rthRetraceIndex < 0) {
-                        // 数组走完了，还没到？强制进入校准
-                        enterAlignPhase();
-                        return;
-                    }
-                    
-                    // 获取当前目标点
-                    let wp = trajectory[rthRetraceIndex];
-                    targetX = wp.x;
-                    targetY = wp.y;
-
-                    // 检查是否到达该点
-                    if (Math.hypot(robotX - targetX, robotY - targetY) < 150) {
-                        rthRetraceIndex--; // 切换到前一个点
-                        // 稍微停顿或不处理，让下次循环处理新点
-                        return;
-                    }
-                }
-
-                // 统一移动控制 (Pure Pursuit)
-                // 计算机器人到目标点的角度
-                const dx = targetX - robotX;
-                const dy = targetY - robotY;
-                const targetAngle = Math.atan2(dy, dx);
-                
-                let angleDiff = targetAngle - robotYawRad;
-                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-                const MoveAngleThreshold = 0.26; // ~15度
-                if (Math.abs(angleDiff) > MoveAngleThreshold) {
-                    if (angleDiff > 0) sendByte(3); // 左转
-                    else sendByte(4); // 右转
-                } else {
-                    sendByte(1); // 前进
-                }
-            } 
-            // --- Phase 1: 角度归零 (Alignment) ---
-            else if (rthPhase === 1) {
-                let angleDiff = 0 - robotYawRad; // 目标是0度
-                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-                const AlignThreshold = 0.08; // ~5度
-                
-                if (Math.abs(angleDiff) <= AlignThreshold) {
-                    addLog(sendLogDiv, "HOME ALIGNED", "#00FF00");
-                    stopRTH(true);
-                } else {
-                    if (angleDiff > 0) sendByte(3); // 左转
-                    else sendByte(4); // 右转
-                }
-            }
-        }
-
-        function enterAlignPhase() {
-            addLog(sendLogDiv, "PHASE 2: ALIGN", "#00FFFF");
-            document.getElementById('rth-sub').innerText = "PHASE 2: ALIGNING";
-            sendByte(0); // 刹车一下
-            rthPhase = 1;
-        }
-
-        // --- 键盘控制 ---
-        function handleMove(cmd, name) {
-            addLog(sendLogDiv, `TX: ${name}`, "#FFFF00");
-            sendByte(cmd);
-        }
-        function handleStop() { sendByte(0); }
-
-        function toggleQ() {
-            isToggledQ = !isToggledQ;
-            sendByte(isToggledQ ? 5 : 6);
-            document.getElementById('mode-voice').classList.toggle('active', isToggledQ);
-        }
         function toggleE() {
             isToggledE = !isToggledE;
-            sendByte(isToggledE ? 7 : 8);
-            document.getElementById('mode-nav').classList.toggle('active', isToggledE);
+            sendByte(isToggledE?7:8); 
+            document.getElementById('mode-feat').classList.toggle('active', isToggledE);
+            document.getElementById('pad-e').classList.toggle('toggled-on', isToggledE);
+            addLog(sendLogDiv, "Mode E: " + (isToggledE ? "ON" : "OFF"), "#FFFF00");
         }
 
         window.addEventListener('keydown', (e) => {
             if (e.repeat) return;
             const k = e.key.toLowerCase();
-            
-            // C: 直线返航
-            if (k === 'c') {
-                const btn = document.querySelector(`.pad-btn[data-key="c"]`);
-                if(btn) btn.classList.add('active-touch');
-                if (isAutoRTH) stopRTH(true); else startRTH('STRAIGHT');
-                return;
-            }
-            // V: 原路返回
-            if (k === 'v') {
-                const btn = document.querySelector(`.pad-btn[data-key="v"]`);
-                if(btn) btn.classList.add('active-touch');
-                if (isAutoRTH) stopRTH(true); else startRTH('RETRACE');
-                return;
-            }
-
-            // WASD 抢夺控制
-            if (isAutoRTH && ['w','a','s','d'].includes(k)) stopRTH(false);
-
+            if (isAutoMode && ['w','a','s','d','c','v'].includes(k)) stopAuto(false);
+            if (k === 'c') { startLineHome(); return; }
+            if (k === 'v') { startFullRetrace(); return; }
             const btn = document.querySelector(`.pad-btn[data-key="${k}"]`);
             if (btn) btn.classList.add('active-touch');
-
-            if (k==='w') { activeKeys.add('w'); handleMove(1, "Fwd"); }
-            if (k==='s') { activeKeys.add('s'); handleMove(2, "Bwd"); }
-            if (k==='a') { activeKeys.add('a'); handleMove(3, "Left"); }
-            if (k==='d') { activeKeys.add('d'); handleMove(4, "Right"); }
+            if (k==='w') { activeKeys.add('w'); handleMove(1); }
+            if (k==='s') { activeKeys.add('s'); handleMove(2); }
+            if (k==='a') { activeKeys.add('a'); handleMove(3); }
+            if (k==='d') { activeKeys.add('d'); handleMove(4); }
             if (k==='q') toggleQ();
-            if (k==='e') toggleE();
-            if (k==='z') { addLog(sendLogDiv, "TX: Z(53)", "#FF00FF"); sendByte(53); }
-            if (k==='x') { addLog(sendLogDiv, "TX: X(54)", "#FF00FF"); sendByte(54); }
+            if (k==='e') toggleE(); 
+            if (k==='z') sendByte(53);
+            if (k==='x') sendByte(54);
         });
 
         window.addEventListener('keyup', (e) => {
@@ -766,31 +816,31 @@
             if (btn) btn.classList.remove('active-touch');
             if (['w','a','s','d'].includes(k)) {
                 activeKeys.delete(k);
-                if(!activeKeys.size && !isAutoRTH) handleStop(); 
+                if (!activeKeys.size && !isAutoMode) sendByte(0);
             }
         });
 
-        // 触摸
         document.querySelectorAll('.pad-btn').forEach(btn => {
             const k = btn.dataset.key;
             const start = (e) => { 
                 e.preventDefault(); 
+                if (isAutoMode) stopAuto(false);
                 btn.classList.add('active-touch'); 
-                
-                if (k === 'c') { if(isAutoRTH) stopRTH(true); else startRTH('STRAIGHT'); return; }
-                if (k === 'v') { if(isAutoRTH) stopRTH(true); else startRTH('RETRACE'); return; }
-                
-                if (isAutoRTH && ['w','a','s','d'].includes(k)) stopRTH(false);
-
-                if(k==='w') handleMove(1,"Fwd"); if(k==='s') handleMove(2,"Bwd");
-                if(k==='a') handleMove(3,"Left"); if(k==='d') handleMove(4,"Right");
-                if(k==='q') toggleQ(); if(k==='e') toggleE();
-                if(k==='z') sendByte(53); if(k==='x') sendByte(54);
+                if(k==='c') startLineHome();
+                else if(k==='v') startFullRetrace();
+                else if(k==='w') handleMove(1); 
+                else if(k==='s') handleMove(2);
+                else if(k==='a') handleMove(3); 
+                else if(k==='d') handleMove(4);
+                else if(k==='q') toggleQ();
+                else if(k==='e') toggleE();
+                else if(k==='z') sendByte(53);
+                else if(k==='x') sendByte(54);
             };
             const end = (e) => { 
                 e.preventDefault(); 
                 btn.classList.remove('active-touch'); 
-                if(['w','a','s','d'].includes(k) && !isAutoRTH) handleStop(); 
+                if(['w','a','s','d'].includes(k)) sendByte(0); 
             };
             btn.addEventListener('mousedown', start); btn.addEventListener('touchstart', start);
             btn.addEventListener('mouseup', end); btn.addEventListener('touchend', end);
