@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>MATLAB 机器人 3D 智能地面站 (V4.1 多主题版)</title>
+    <title>MATLAB 机器人 3D 智能地面站 (V4.7 目标锁定版)</title>
     <style>
         /* --- CSS 变量定义 (主题核心) --- */
         :root {
@@ -13,6 +13,7 @@
             --text-color: #FFFF00;
             --accent-color: #FF0000; /* 边框和按钮 */
             --highlight-color: #00FF00; /* 日志高亮 */
+            --coverage-color: #00FFFF; /* 覆盖路径颜色 */
             --grid-color: #222222;
             --font-main: "Brush Script MT", "Times New Roman", cursive, serif;
             --font-mono: "Consolas", monospace;
@@ -28,8 +29,9 @@
             --text-color: #00f3ff;
             --accent-color: #d600ff;
             --highlight-color: #00ff9d;
+            --coverage-color: #ff0055;
             --grid-color: #1a2642;
-            --font-main: "Segoe UI", Arial, sans-serif; /* 更科幻的字体 */
+            --font-main: "Segoe UI", Arial, sans-serif;
             --font-mono: "Courier New", monospace;
             --btn-text: #ffffff;
             --btn-bg: #d600ff;
@@ -43,6 +45,7 @@
             --text-color: #333333;
             --accent-color: #007bff;
             --highlight-color: #28a745;
+            --coverage-color: #6610f2;
             --grid-color: #e0e0e0;
             --font-main: "Helvetica Neue", Arial, sans-serif;
             --font-mono: "Menlo", monospace;
@@ -161,7 +164,6 @@
         #map-wrapper {
             width: 100%;
             height: 380px;
-            /* 背景色由 Canvas 覆盖，这里设置兜底 */
             background: var(--bg-color); 
             position: relative;
             border-radius: 5px;
@@ -226,15 +228,19 @@
             color: #fff;
         }
         .pad-btn.toggled-on {
-            background-color: var(--accent-color); /* 激活状态 */
+            background-color: var(--accent-color);
             color: #fff;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
         }
+        /* 特殊按钮颜色 */
+        .auto-btn { font-size: 16px; border-color: var(--highlight-color); color: var(--highlight-color); }
+        .auto-btn:active { background: var(--highlight-color); color: #000; }
+        
+        .cover-btn { font-size: 16px; border-color: var(--coverage-color); color: var(--coverage-color); }
+        .cover-btn:active { background: var(--coverage-color); color: #000; }
 
         .func-row { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 2px; }
         .func-btn { flex: 1; font-size: 18px; border-color: #666; }
-        .auto-btn { flex: 1; font-size: 16px; border-color: var(--highlight-color); color: var(--highlight-color); }
-        .auto-btn:active { background: var(--highlight-color); color: #000; }
 
         /* 模式列表 */
         .mode-list {
@@ -284,7 +290,6 @@
         ::-webkit-scrollbar-track { background: var(--bg-color); }
         ::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 3px; }
 
-        /* 风格选择器 */
         .theme-select {
             background: var(--bg-color);
             color: var(--text-color);
@@ -310,9 +315,10 @@
             </select>
 
             <div id="send-log" class="log-area">
-                <div>[System] V4.1 Engine Ready...</div>
+                <div>[System] V4.7 Locked Target Ready...</div>
                 <div>[Tip] Drag Map to Move</div>
                 <div>[Tip] Double Click to Nav</div>
+                <div>[Tip] Press 'R' for Area Coverage</div>
             </div>
             <div style="margin-top: 10px;">
                 <button id="btn-stop" class="matlab-btn" onclick="emergencyStop()">EMERGENCY STOP</button>
@@ -361,6 +367,7 @@
                     <div class="func-row">
                         <div id="pad-z" class="pad-btn func-btn" data-key="z">Z(53)</div>
                         <div id="pad-x" class="pad-btn func-btn" data-key="x">X(54)</div>
+                        <div id="pad-r" class="pad-btn cover-btn" data-key="r">Cover(R)</div>
                     </div>
                     <div class="func-row">
                         <div id="pad-c" class="pad-btn auto-btn" data-key="c">Home(C)</div>
@@ -375,6 +382,7 @@
                     <li id="mode-voice">Mode Q (Voice)</li>
                     <li id="mode-feat">Mode E (Feature)</li>
                     <li id="mode-nav">Auto Navigation (Run)</li>
+                    <li id="mode-cover">Area Coverage (Bow)</li>
                 </ul>
             </div>
         </div>
@@ -423,14 +431,16 @@
         let lastTimestamp = 0; 
         
         const TRAJECTORY_MAX_POINTS = 5000; 
-        let trajectory = []; 
+        let trajectory = []; // 历史轨迹（用户跑的）
+        let coveragePath = []; // 计算机生成的弓字形路径
 
         // --- 自动功能变量 ---
         let isAutoMode = false;
         let autoInterval = null;
         let autoTargetIndex = -1; 
-        let autoType = ''; 
-        let lastTrajIndex = -1;
+        let finalGoalIndex = -1; // [V4.7 新增] 锁定的终点Index
+        let pathStep = 1; // [V4.7 新增] 路径方向: 1(正向) or -1(反向)
+        let autoType = ''; // 'PATH_FOLLOW', 'STRAIGHT', 'COVERAGE'
 
         // --- 视图变量 ---
         let viewScale = 0.2; 
@@ -452,7 +462,7 @@
             } else {
                 document.documentElement.setAttribute('data-theme', themeName);
             }
-            drawFrame(); // 立即重绘地图以适应新颜色
+            drawFrame(); 
         }
 
         function getThemeColor(varName) {
@@ -539,6 +549,7 @@
 
             let targetIdx = -1;
             let minDist = 999999;
+            // 默认导航匹配到历史轨迹
             for(let i = 0; i < trajectory.length; i++) {
                 let p = trajectory[i];
                 let d = Math.hypot(p.x - clickPos.x, p.y - clickPos.y);
@@ -549,26 +560,35 @@
             }
 
             if (minDist < 600) {
-                addLog(sendLogDiv, "Navigating to Idx:" + targetIdx);
-                startPathFollow(targetIdx);
+                // startPathFollow(targetIdx); // 旧逻辑：直接把index传进去当起点
+                // [V4.7 新逻辑] 传入的 targetIdx 是终点！
+                startPathFollow(targetIdx); 
             } else {
                 addLog(sendLogDiv, "Too far from path!", "red");
             }
         });
 
-        // --- 绘图 (已更新支持主题) ---
+        // --- 绘图 (支持主题) ---
         function drawFrame() {
-            // 获取当前主题颜色
             const bgColor = getThemeColor('--bg-color');
             const gridColor = getThemeColor('--grid-color');
             const textColor = getThemeColor('--text-color');
             const accentColor = getThemeColor('--accent-color');
+            const coverageColor = getThemeColor('--coverage-color');
 
             ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             drawGrid(gridColor);
-            drawTrajectory3D(textColor, accentColor);
+            
+            // 绘制历史轨迹
+            drawTrajectoryPath(trajectory, isAutoMode && autoType !== 'COVERAGE' ? "#666" : getThemeColor('--highlight-color'));
+            
+            // 绘制覆盖路径 (如果有)
+            if (coveragePath.length > 0) {
+                drawTrajectoryPath(coveragePath, coverageColor, true);
+            }
+
             drawAutoTarget(accentColor); 
             drawRobot3D();
         }
@@ -592,34 +612,51 @@
             ctx.fillStyle = getThemeColor('--accent-color'); ctx.fillRect(origin.x-3, origin.y-3, 6, 6);
         }
 
-        function drawTrajectory3D(normalColor, autoColor) {
-            if (trajectory.length < 2) return;
+        function drawTrajectoryPath(pathData, color, isDashed = false) {
+            if (pathData.length < 2) return;
             ctx.beginPath();
-            ctx.strokeStyle = isAutoMode ? "#666" : getThemeColor('--highlight-color'); 
-            ctx.lineWidth = 1.5; 
-            let step = Math.ceil(trajectory.length / 1000); 
-            let start = project3D(trajectory[0].x, trajectory[0].y, 0);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            if (isDashed) ctx.setLineDash([5, 5]); else ctx.setLineDash([]);
+            
+            let step = Math.ceil(pathData.length / 1000); 
+            let start = project3D(pathData[0].x, pathData[0].y, 0);
             ctx.moveTo(start.x, start.y);
-            for (let i = 1; i < trajectory.length; i+=step) {
-                let p = project3D(trajectory[i].x, trajectory[i].y, 0);
+            for (let i = 1; i < pathData.length; i+=step) {
+                let p = project3D(pathData[i].x, pathData[i].y, 0);
                 ctx.lineTo(p.x, p.y);
             }
-            let last = project3D(trajectory[trajectory.length-1].x, trajectory[trajectory.length-1].y, 0);
+            let last = project3D(pathData[pathData.length-1].x, pathData[pathData.length-1].y, 0);
             ctx.lineTo(last.x, last.y);
             ctx.stroke();
+            ctx.setLineDash([]);
         }
 
         function drawAutoTarget(color) {
-            if (!isAutoMode || autoTargetIndex < 0 || autoTargetIndex >= trajectory.length) return;
-            let t = trajectory[autoTargetIndex];
+            if (!isAutoMode) return;
+            let currentPath = (autoType === 'COVERAGE') ? coveragePath : trajectory;
+            
+            // [V4.7 Fix] 视觉上只画终点，不要画那个会动的中间点，避免视觉干扰
+            let drawIdx = (finalGoalIndex !== -1) ? finalGoalIndex : autoTargetIndex;
+
+            if (drawIdx < 0 || drawIdx >= currentPath.length) return;
+
+            let t = currentPath[drawIdx];
             let screenT = project3D(t.x, t.y, 0);
             let robotS = project3D(robotX, robotY, 0);
+            
+            // 连线
             ctx.beginPath(); ctx.strokeStyle = color; ctx.setLineDash([5, 5]);
             ctx.moveTo(robotS.x, robotS.y); ctx.lineTo(screenT.x, screenT.y); ctx.stroke(); ctx.setLineDash([]);
+            
+            // 画个旗帜或者十字，表示这是“最终目标”
             ctx.strokeStyle = getThemeColor('--text-color'); ctx.lineWidth = 2; ctx.beginPath();
             ctx.moveTo(screenT.x-8, screenT.y); ctx.lineTo(screenT.x+8, screenT.y);
             ctx.moveTo(screenT.x, screenT.y-8); ctx.lineTo(screenT.x, screenT.y+8);
             ctx.stroke();
+            
+            // 画个圈圈
+            ctx.beginPath(); ctx.arc(screenT.x, screenT.y, 12, 0, Math.PI*2); ctx.stroke();
         }
 
         function drawRobot3D() {
@@ -647,16 +684,10 @@
                 ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[4].x, pts[4].y); ctx.moveTo(pts[1].x, pts[1].y); ctx.lineTo(pts[5].x, pts[5].y);
                 ctx.moveTo(pts[2].x, pts[2].y); ctx.lineTo(pts[6].x, pts[6].y); ctx.moveTo(pts[3].x, pts[3].y); ctx.lineTo(pts[7].x, pts[7].y);
                 ctx.stroke(); 
-                
-                // 半透明填充
-                // 将 hex 颜色转为 rgba (简单处理，假设 hex 为 #RRGGBB)
                 ctx.fillStyle = color + "33"; 
                 ctx.fill();
             }
-            // 机器人主体使用文本色（高对比度）
             drawBox(0, 0, 5, chassisL, chassisW, chassisH, textCol); 
-            
-            // 机器人朝向指示使用强调色
             ctx.beginPath(); ctx.strokeStyle = accent; ctx.lineWidth = 2;
             const hS = transform(0, 0, chassisH+2); const hE = transform(chassisL, 0, chassisH+2);
             ctx.moveTo(hS.x, hS.y); ctx.lineTo(hE.x, hE.y); ctx.stroke();
@@ -714,20 +745,53 @@
         }
 
         function clearMap() {
-            emergencyStop(); robotX = 0; robotY = 0; robotYawRad = 0; trajectory = []; lastTimestamp = 0; resetView();
+            emergencyStop(); robotX = 0; robotY = 0; robotYawRad = 0; trajectory = []; coveragePath = []; lastTimestamp = 0; resetView();
         }
 
-        // --- 核心控制算法 (V4.0 稳定版) ---
+        // --- 核心控制算法 (V4.7 目标锁定 + 智能路径截取) ---
         
-        function startPathFollow(index) {
+        // 辅助函数：找离机器人最近的轨迹点索引
+        function findClosestTrajectoryIndex() {
+            let closestIdx = -1;
+            let minDist = Infinity;
+            for(let i = 0; i < trajectory.length; i++) {
+                let d = Math.hypot(trajectory[i].x - robotX, trajectory[i].y - robotY);
+                if (d < minDist) {
+                    minDist = d;
+                    closestIdx = i;
+                }
+            }
+            return closestIdx;
+        }
+
+        function startPathFollow(clickedIndex) {
             stopAuto(false);
-            if (index < 0 || index >= trajectory.length) return;
+            if (clickedIndex < 0 || clickedIndex >= trajectory.length) return;
+            
+            // [V4.7 核心逻辑修正]
+            // 1. 确定终点
+            finalGoalIndex = clickedIndex;
+
+            // 2. 确定起点 (离机器人最近的点)
+            let startIdx = findClosestTrajectoryIndex();
+            if (startIdx === -1) startIdx = 0; // 兜底
+            
+            // 3. 确定方向
+            if (clickedIndex >= startIdx) {
+                pathStep = 1; // 正向跑
+            } else {
+                pathStep = -1; // 反向跑 (虽然目前UI双击逻辑倾向于点后面，但加上这个支持往回跑)
+            }
+
+            // 4. 设置当前追踪点为起点
+            autoTargetIndex = startIdx;
             
             isAutoMode = true;
             autoType = 'PATH_FOLLOW';
-            autoTargetIndex = index;
-            lastTrajIndex = -1; 
             
+            addLog(sendLogDiv, "Nav: " + startIdx + " -> " + finalGoalIndex);
+            
+            document.getElementById('nav-overlay-text').innerText = "AUTO NAVIGATION...";
             document.getElementById('nav-overlay-text').style.display = 'block';
             document.getElementById('mode-nav').classList.add('active');
             autoInterval = setInterval(autoControlLoop, 100);
@@ -737,13 +801,103 @@
             stopAuto(false);
             isAutoMode = true;
             autoType = 'STRAIGHT';
+            finalGoalIndex = -1; // 直线回家模式不需要轨迹索引
             addLog(sendLogDiv, "Line Return Start");
             autoInterval = setInterval(autoControlLoop, 100);
         }
         
         function startFullRetrace() {
-            if (trajectory.length > 0) startPathFollow(0); 
+            if (trajectory.length > 0) {
+                // 原路完整回放：从 0 到 最后一个
+                startPathFollow(trajectory.length - 1); 
+                // 修正起点为0 (强制从头跑)
+                autoTargetIndex = 0; 
+                pathStep = 1;
+            }
             else addLog(sendLogDiv, "No Path to Retrace!", "red");
+        }
+
+        // *** 弓字形覆盖算法 (Boustrophedon) ***
+        function startCoverage() {
+            stopAuto(false);
+            if (trajectory.length < 10) {
+                addLog(sendLogDiv, "Traj too short!", "red");
+                return;
+            }
+
+            addLog(sendLogDiv, "Computing Path...");
+            const generated = generateCoveragePath(trajectory);
+            if (generated.length < 2) {
+                addLog(sendLogDiv, "Area too small/open!", "red");
+                return;
+            }
+
+            coveragePath = generated;
+            addLog(sendLogDiv, "Coverage Pts: " + coveragePath.length);
+
+            isAutoMode = true;
+            autoType = 'COVERAGE'; 
+            autoTargetIndex = 0; 
+            finalGoalIndex = coveragePath.length - 1; // 锁定终点为覆盖路径的最后
+            pathStep = 1;
+
+            document.getElementById('nav-overlay-text').innerText = "AREA COVERAGE...";
+            document.getElementById('nav-overlay-text').style.display = 'block';
+            document.getElementById('mode-cover').classList.add('active');
+            
+            autoInterval = setInterval(autoControlLoop, 100);
+            drawFrame();
+        }
+
+        // 射线法判断点是否在多边形内
+        function isPointInPoly(pt, poly) {
+            let c = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                if (((poly[i].y > pt.y) != (poly[j].y > pt.y)) &&
+                    (pt.x < (poly[j].x - poly[i].x) * (pt.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)) {
+                    c = !c;
+                }
+            }
+            return c;
+        }
+
+        function generateCoveragePath(poly) {
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (let p of poly) {
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+            }
+
+            const stepY = 250; 
+            const stepX = 100; 
+            let path = [];
+            let direction = 1; 
+
+            for (let y = minY + stepY/2; y < maxY; y += stepY) {
+                let rowPoints = [];
+                for (let x = minX; x <= maxX; x += stepX) {
+                    if (isPointInPoly({x: x, y: y}, poly)) {
+                        rowPoints.push({x: x, y: y});
+                    }
+                }
+
+                if (rowPoints.length > 0) {
+                    if (rowPoints.length > 2) {
+                        let first = rowPoints[0];
+                        let last = rowPoints[rowPoints.length - 1];
+                        rowPoints = [first, last];
+                    }
+
+                    if (direction === -1) {
+                        rowPoints.reverse();
+                    }
+                    path.push(...rowPoints);
+                    direction *= -1; 
+                }
+            }
+            return path;
         }
 
         function stopAuto(stopRobot = true) {
@@ -753,6 +907,8 @@
             if (stopRobot) sendByte(0);
             document.getElementById('nav-overlay-text').style.display = 'none';
             document.getElementById('mode-nav').classList.remove('active');
+            document.getElementById('mode-cover').classList.remove('active');
+            finalGoalIndex = -1; // 重置终点
             addLog(sendLogDiv, "Stopped");
             drawFrame();
         }
@@ -761,61 +917,88 @@
             stopAuto(true); sendByte(0);
         }
 
-        // *** 控制循环 ***
+        // *** 控制循环 (V4.7) ***
         function autoControlLoop() {
             let targetX, targetY;
             const LookAheadDist = 300; 
+            
+            // 决定当前跟随的路径
+            let currentPath = null;
+            if (autoType === 'PATH_FOLLOW') currentPath = trajectory;
+            else if (autoType === 'COVERAGE') currentPath = coveragePath;
 
-            if (autoType === 'PATH_FOLLOW') {
-                let closestDist = Infinity;
-                let currentIndex = -1;
+            if (currentPath) {
+                // 1. 到达判断逻辑 (动态半径)
+                let currentTargetPt = currentPath[autoTargetIndex];
+                let distToTarget = Math.hypot(currentTargetPt.x - robotX, currentTargetPt.y - robotY);
                 
-                let searchStart = 0;
-                let searchEnd = trajectory.length;
+                // 判断是否是真正的终点
+                let isFinalPoint = (autoTargetIndex === finalGoalIndex);
+                
+                // 动态半径
+                let effectiveRadius = (autoType === 'COVERAGE') ? 60 : (isFinalPoint ? 50 : 300);
 
-                if (lastTrajIndex !== -1) {
-                    searchStart = Math.max(0, lastTrajIndex - 500);
-                    searchEnd = Math.min(trajectory.length, lastTrajIndex + 500);
-                }
-
-                for (let i = searchStart; i < searchEnd; i++) {
-                    let d = Math.hypot(trajectory[i].x - robotX, trajectory[i].y - robotY);
-                    if (d < closestDist) {
-                        closestDist = d;
-                        currentIndex = i;
+                // 如果进入了判定圈
+                if (distToTarget < effectiveRadius) {
+                    // 检查是否到达终点
+                    if (isFinalPoint) {
+                        // [终点冲刺逻辑]
+                        addLog(sendLogDiv, "Final Approach...");
+                        clearInterval(autoInterval); 
+                        sendByte(1); // 强制最后直行一步
+                        setTimeout(() => {
+                            stopAuto(true); // 300ms 后彻底停车
+                            addLog(sendLogDiv, "Destination Reached!");
+                        }, 300);
+                        return;
                     }
+                    // 还没到终点，继续往后走
+                    autoTargetIndex += pathStep; 
+                    
+                    // 边界保护 (防止数组越界)
+                    if (autoTargetIndex < 0 || autoTargetIndex >= currentPath.length) {
+                         stopAuto(true); return;
+                    }
+                    
+                    currentTargetPt = currentPath[autoTargetIndex]; 
                 }
-                
-                if (currentIndex !== -1) lastTrajIndex = currentIndex;
 
-                let distToTarget = Math.hypot(trajectory[autoTargetIndex].x - robotX, trajectory[autoTargetIndex].y - robotY);
-                if (distToTarget < 40) {
-                    addLog(sendLogDiv, "Arrived!");
-                    stopAuto(true);
-                    return;
-                }
-
-                if (distToTarget < LookAheadDist) {
-                    targetX = trajectory[autoTargetIndex].x;
-                    targetY = trajectory[autoTargetIndex].y;
+                // 2. 运动目标计算
+                if (autoType === 'COVERAGE') {
+                    // 覆盖模式：直达
+                    targetX = currentTargetPt.x;
+                    targetY = currentTargetPt.y;
                 } else {
-                    let direction = (autoTargetIndex > currentIndex) ? 1 : -1;
-                    let lookaheadIdx = autoTargetIndex; 
-                    let i = currentIndex;
-                    while (i >= 0 && i < trajectory.length) {
-                        let d = Math.hypot(trajectory[i].x - robotX, trajectory[i].y - robotY);
-                        if (d > LookAheadDist) {
-                            lookaheadIdx = i;
-                            break;
+                    // 普通导航：前瞻逻辑
+                    // 注意：这里的前瞻只是为了计算车头朝向，不会影响 finalGoalIndex
+                    let lookaheadIdx = autoTargetIndex;
+                    
+                    // 只有当不是终点时才去搜索前瞻点
+                    if (!isFinalPoint) {
+                        // 沿着 pathStep 方向搜索
+                        let searchLimit = 50; // 防止搜太多
+                        let i = autoTargetIndex;
+                        while(searchLimit > 0) {
+                            if (i < 0 || i >= currentPath.length) break;
+                            if (i === finalGoalIndex) { lookaheadIdx = i; break; } // 不能超过终点
+                            
+                            let d = Math.hypot(currentPath[i].x - robotX, currentPath[i].y - robotY);
+                            if (d > LookAheadDist) {
+                                lookaheadIdx = i;
+                                break;
+                            }
+                            i += pathStep;
+                            searchLimit--;
                         }
-                        if (i === autoTargetIndex) break;
-                        i += direction;
+                    } else {
+                        lookaheadIdx = autoTargetIndex;
                     }
-                    targetX = trajectory[lookaheadIdx].x;
-                    targetY = trajectory[lookaheadIdx].y;
+
+                    targetX = currentPath[lookaheadIdx].x;
+                    targetY = currentPath[lookaheadIdx].y;
                 }
-            } 
-            else if (autoType === 'STRAIGHT') {
+
+            } else if (autoType === 'STRAIGHT') {
                 targetX = 0; targetY = 0;
                 if (Math.hypot(robotX, robotY) < 40) {
                     addLog(sendLogDiv, "Home Reached");
@@ -823,18 +1006,34 @@
                 }
             }
 
+            // 3. 运动指令发送
             const dx = targetX - robotX;
             const dy = targetY - robotY;
             const targetAngle = Math.atan2(dy, dx);
             let angleDiff = targetAngle - robotYawRad;
+            
             while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
             while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
 
-            if (Math.abs(angleDiff) > 0.4) {
-                if (angleDiff > 0) sendByte(3); 
-                else sendByte(4); 
+            if (Math.hypot(dx, dy) < 30) {
+                 sendByte(1); 
             } else {
-                sendByte(1); 
+                if (autoType === 'COVERAGE') {
+                    if (Math.abs(angleDiff) > 0.25) {
+                        if (angleDiff > 0) sendByte(3);
+                        else sendByte(4);
+                    } else {
+                        sendByte(1);
+                    }
+                } else {
+                    // 防打转优化
+                    if (Math.abs(angleDiff) > 0.5) {
+                        if (angleDiff > 0) sendByte(3);
+                        else sendByte(4);
+                    } else {
+                        sendByte(1);
+                    }
+                }
             }
             drawFrame();
         }
@@ -870,7 +1069,6 @@
         function addLog(element, msg, color=null) {
             const now = new Date().toLocaleTimeString();
             if (element.childElementCount > 30) element.removeChild(element.lastChild);
-            // 如果没有指定颜色，使用当前主题的默认高亮色
             const finalColor = color ? color : "";
             const styleStr = finalColor ? `style="color:${finalColor}"` : "";
             element.innerHTML = `<div ${styleStr}>[${now}] ${msg}</div>` + element.innerHTML;
@@ -896,9 +1094,10 @@
         window.addEventListener('keydown', (e) => {
             if (e.repeat) return;
             const k = e.key.toLowerCase();
-            if (isAutoMode && ['w','a','s','d','c','v'].includes(k)) stopAuto(false);
+            if (isAutoMode && ['w','a','s','d','c','v','r'].includes(k)) stopAuto(false);
             if (k === 'c') { startLineHome(); return; }
             if (k === 'v') { startFullRetrace(); return; }
+            if (k === 'r') { startCoverage(); return; }
             const btn = document.querySelector(`.pad-btn[data-key="${k}"]`);
             if (btn) btn.classList.add('active-touch');
             if (k==='w') { activeKeys.add('w'); handleMove(1); }
@@ -929,6 +1128,7 @@
                 btn.classList.add('active-touch'); 
                 if(k==='c') startLineHome();
                 else if(k==='v') startFullRetrace();
+                else if(k==='r') startCoverage();
                 else if(k==='w') handleMove(1); 
                 else if(k==='s') handleMove(2);
                 else if(k==='a') handleMove(3); 
